@@ -3,6 +3,8 @@ QT += core network sql
 
 CONFIG += c++17 console
 CONFIG -= app_bundle
+CONFIG += debug
+CONFIG -= release
 
 SOURCES += ragbot.cpp
 

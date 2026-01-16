@@ -13,6 +13,7 @@
 #include <QEventLoop>
 #include <QTimer>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <cmath>
 
@@ -22,9 +23,22 @@
 // Configuration for remote LLM
 struct RemoteLLMConfig {
     bool enabled = false;
-    QString baseUrl = "http://192.168.1.100:1234/v1";  // Change to your Windows PC IP
-    QString model = "qwen2.5-v1-7b";
-    int timeout = 60000;  // 60 seconds
+    QString baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8B-Instruct";
+    QString model = "llama-3.2-8B-Instruct";
+    int timeout = 4 * 60000;
+};
+
+// Configuration for roleplay
+struct RoleplayConfig {
+    bool enabled = true;
+    QString characterName = "Survivor";
+    QString characterBackground = "You are a survivor in the post-apocalyptic world of Cataclysm: Dark Days Ahead. "
+                                  "You have some knowledge of basic survival, crafting, and the various dangers that lurk in this world. "
+                                  "You speak from personal experience and offer practical advice while maintaining an immersive tone."
+                                  "Never say thing 'according to the data provided' or reference json field names, always pretend you're speaking from memory"
+                                  "Do not embelish the input data only speak about what you know to be true based on the input";
+    QString baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8B-Instruct";
+    QString model = "llama-3.2-8B-Instruct";
 };
 
 class RemoteLLMClient
@@ -33,6 +47,15 @@ public:
     RemoteLLMClient(const RemoteLLMConfig &config)
         : m_config(config), m_manager(new QNetworkAccessManager())
     {
+    }
+    
+    RemoteLLMClient(const QString &baseUrl, const QString &model, int timeout = 60000)
+        : m_manager(new QNetworkAccessManager())
+    {
+        m_config.enabled = true;
+        m_config.baseUrl = baseUrl;
+        m_config.model = model;
+        m_config.timeout = timeout;
     }
     
     ~RemoteLLMClient()
@@ -68,7 +91,7 @@ public:
         QByteArray jsonData = doc.toJson();
         
         QNetworkRequest netRequest;
-        netRequest.setUrl(QUrl(m_config.baseUrl + "/chat/completions"));
+        netRequest.setUrl(QUrl(m_config.baseUrl + "/v1/chat/completions"));
         netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
         netRequest.setTransferTimeout(m_config.timeout);
         
@@ -262,15 +285,25 @@ class RAGBot
 {
 public:
     RAGBot(const QString &embedModelPath, EmbeddingDatabase *db, 
-           const RemoteLLMConfig &llmConfig)
-        : m_embedModelPath(embedModelPath), m_db(db), m_llmConfig(llmConfig),
-          m_embedModel(nullptr), m_embedCtx(nullptr), m_remoteLLM(nullptr)
+           const RemoteLLMConfig &llmConfig, const RoleplayConfig &rpConfig)
+        : m_embedModelPath(embedModelPath), m_db(db), 
+          m_llmConfig(llmConfig), m_rpConfig(rpConfig),
+          m_embedModel(nullptr), m_embedCtx(nullptr), 
+          m_remoteLLM(nullptr), m_roleplayLLM(nullptr)
     {
         if (m_llmConfig.enabled) {
             m_remoteLLM = new RemoteLLMClient(m_llmConfig);
-            qDebug() << "Remote LLM enabled:" << m_llmConfig.baseUrl;
+            qDebug() << "Research LLM enabled:" << m_llmConfig.baseUrl;
         } else {
-            qDebug() << "Remote LLM disabled - would use local models";
+            qDebug() << "Research LLM disabled - would use local models";
+        }
+        
+        if (m_rpConfig.enabled) {
+            m_roleplayLLM = new RemoteLLMClient(m_rpConfig.baseUrl, m_rpConfig.model, 60000);
+            qDebug() << "Roleplay LLM enabled:" << m_rpConfig.baseUrl;
+            qDebug() << "Character:" << m_rpConfig.characterName;
+        } else {
+            qDebug() << "Roleplay mode disabled";
         }
     }
     
@@ -278,6 +311,7 @@ public:
     {
         cleanup();
         delete m_remoteLLM;
+        delete m_roleplayLLM;
     }
     
     bool initialize()
@@ -326,7 +360,14 @@ public:
         }
         
         qDebug() << "\n=== RAG Bot Ready ===";
-        qDebug() << "Type your questions (or 'quit' to exit)\n";
+        if (m_rpConfig.enabled) {
+            qDebug() << "Mode: Two-stage (Research + Roleplay)";
+            qDebug() << "Character:" << m_rpConfig.characterName;
+        } else {
+            qDebug() << "Mode: Research only";
+        }
+        qDebug() << "Type your questions (or 'quit' to exit)";
+        qDebug() << "Commands: 'toggle roleplay' to enable/disable stage 2\n";
         
         QTextStream in(stdin);
         
@@ -338,6 +379,11 @@ public:
             if (question.toLower() == "quit" || question.toLower() == "exit") {
                 qDebug() << "Goodbye!";
                 break;
+            }
+            if (question.toLower() == "toggle roleplay") {
+                m_rpConfig.enabled = !m_rpConfig.enabled;
+                qDebug() << "Roleplay mode:" << (m_rpConfig.enabled ? "ENABLED" : "DISABLED");
+                continue;
             }
             
             processQuestion(question);
@@ -422,27 +468,68 @@ private:
         
         QString researchPrompt = QString(
             "You are a helpful assistant analyzing Cataclysm: Dark Days Ahead game data. "
-            "Answer the question based on the provided context documents.\n\n"
+            "Answer the question based on the provided context documents. "
+            "Be factual, concise, and cite specific game mechanics, items, or data when relevant.\n\n"
             "Context:\n%1\n\n"
             "Question: %2"
         ).arg(context, question);
         
         QString researchAnswer;
+        qDebug() << context;
+        qDebug() << question;
+        qDebug() << researchAnswer;
         
         if (m_llmConfig.enabled) {
+            qInfo() << "m_llmConfig.enabled";
             QTextStream(stdout) << "\nBot (Research): " << Qt::flush;
             researchAnswer = m_remoteLLM->chat("", researchPrompt, true);
             QTextStream(stdout) << "\n" << Qt::flush;
         } else {
-            qDebug() << "Would call local Qwen 7B model here";
+            qDebug() << "Would call local research model here";
             researchAnswer = "[Research answer would appear here with local model]";
         }
         
-        // Stage 2: Roleplay response (optional - can enable later)
-        // For now, just show research answer
-        
         if (researchAnswer.isEmpty()) {
-            qWarning() << "No response from LLM";
+            qWarning() << "No response from research LLM";
+            return;
+        }
+        
+        // Stage 2: Roleplay response
+        if (m_rpConfig.enabled && m_roleplayLLM) {
+            qInfo() << "m_rpConfig.enabled";
+            qDebug() << "\n[Stage 2: Roleplay Response]";
+
+            QFile roleplayPromptFile("roleplayPrompt.txt");
+            QString rp;
+            
+            if (roleplayPromptFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                rp = QString::fromUtf8(roleplayPromptFile.readAll());
+                roleplayPromptFile.close();
+            } else {
+                qWarning() << "Failed to open roleplayPrompt.txt";
+            }
+            
+            qDebug() << rp;
+
+            QString roleplayPrompt = rp.arg(m_rpConfig.characterName, researchAnswer, question);
+
+            qDebug() << m_rpConfig.characterName;
+            qDebug() << question;
+            qDebug() << researchAnswer;
+
+            //qDebug() << roleplayPrompt;
+            
+            QTextStream(stdout) << "\n" << m_rpConfig.characterName << ": " << Qt::flush;
+            QString roleplayAnswer = m_roleplayLLM->chat(
+                m_rpConfig.characterBackground, 
+                roleplayPrompt, 
+                true
+            );
+            QTextStream(stdout) << "\n" << Qt::flush;
+            
+            if (roleplayAnswer.isEmpty()) {
+                qWarning() << "No response from roleplay LLM";
+            }
         }
     }
     
@@ -463,7 +550,9 @@ private:
     QString m_embedModelPath;
     EmbeddingDatabase *m_db;
     RemoteLLMConfig m_llmConfig;
+    RoleplayConfig m_rpConfig;
     RemoteLLMClient *m_remoteLLM;
+    RemoteLLMClient *m_roleplayLLM;
     
     llama_model *m_embedModel;
     llama_context *m_embedCtx;
@@ -486,15 +575,34 @@ int main(int argc, char *argv[])
         return 1;
     }
     
-    // Configure remote LLM
+    // Configure research LLM
     RemoteLLMConfig llmConfig;
-    llmConfig.enabled = true;  // Set to false to use local models
-    llmConfig.baseUrl = "http://192.168.0.97:1234/v1";  // Change to your Windows PC IP
-    llmConfig.model = "qwen2.5-v1-7b";
-    llmConfig.timeout = 60000;
+    llmConfig.enabled = true;
+    llmConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8B-Instruct";
+    llmConfig.model = "llama-3.2-8B-Instruct";
+    llmConfig.timeout = 4 * 60000;
     
+    RoleplayConfig rpConfig;
+    QFile survivorPromptFile("survivorPrompt.txt");
+    QString sp;
+    
+    if (survivorPromptFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        sp = QString::fromUtf8(survivorPromptFile.readAll());
+        survivorPromptFile.close();
+    } else {
+        qWarning() << "Failed to open survivorPrompt.txt";
+    }
+
+    rpConfig.enabled = true;  // Set to false to disable roleplay
+    rpConfig.characterName = "Survivor";
+    rpConfig.characterBackground = sp;
+
+    rpConfig.baseUrl = "http://192.168.0.97:8080/upstream/mistral-7b-instruct";
+    rpConfig.model = "mistral-7b-instruct";
+    
+
     EmbeddingDatabase db(dbPath);
-    RAGBot bot(embedModelPath, &db, llmConfig);
+    RAGBot bot(embedModelPath, &db, llmConfig, rpConfig);
     
     QTimer::singleShot(0, [&bot]() {
         bot.startChatLoop();
@@ -502,4 +610,3 @@ int main(int argc, char *argv[])
     
     return app.exec();
 }
-
