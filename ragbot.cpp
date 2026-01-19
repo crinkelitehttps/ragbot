@@ -513,11 +513,13 @@ private:
 
             QString roleplayPrompt = rp.arg(m_rpConfig.characterName, researchAnswer, question);
 
+#if 0
             qDebug() << m_rpConfig.characterName;
             qDebug() << question;
             qDebug() << researchAnswer;
 
-            //qDebug() << roleplayPrompt;
+            qDebug() << roleplayPrompt;
+#endif
             
             QTextStream(stdout) << "\n" << m_rpConfig.characterName << ": " << Qt::flush;
             QString roleplayAnswer = m_roleplayLLM->chat(
@@ -597,8 +599,13 @@ int main(int argc, char *argv[])
     rpConfig.characterName = "Survivor";
     rpConfig.characterBackground = sp;
 
+    rpConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8B-Instruct";
+    rpConfig.model = "llama-3.2-8B-Instruct";
+
+#if 0
     rpConfig.baseUrl = "http://192.168.0.97:8080/upstream/mistral-7b-instruct";
     rpConfig.model = "mistral-7b-instruct";
+#endif
     
 
     EmbeddingDatabase db(dbPath);
