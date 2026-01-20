@@ -32,13 +32,20 @@ struct RemoteLLMConfig {
 struct RoleplayConfig {
     bool enabled = true;
     QString characterName = "Survivor";
-    QString characterBackground = "You are a survivor in the post-apocalyptic world of Cataclysm: Dark Days Ahead. "
-                                  "You have some knowledge of basic survival, crafting, and the various dangers that lurk in this world. "
-                                  "You speak from personal experience and offer practical advice while maintaining an immersive tone."
-                                  "Never say thing 'according to the data provided' or reference json field names, always pretend you're speaking from memory"
-                                  "Do not embelish the input data only speak about what you know to be true based on the input";
+    QString characterBackground = "";
     QString baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8B-Instruct";
     QString model = "llama-3.2-8B-Instruct";
+    
+    bool loadFromFile(const QString &filePath) {
+        QFile file(filePath);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            qWarning() << "Failed to open character background file:" << filePath;
+            return false;
+        }
+        characterBackground = QString::fromUtf8(file.readAll());
+        file.close();
+        return !characterBackground.isEmpty();
+    }
 };
 
 class RemoteLLMClient
@@ -200,11 +207,11 @@ class EmbeddingDatabase
 public:
     EmbeddingDatabase(const QString &dbName = "embeddings.db")
     {
-        m_db = QSqlDatabase::addDatabase("QSQLITE");
+        m_db = QSqlDatabase::addDatabase("QSQLITE", "embeddings");
         m_db.setDatabaseName(dbName);
         
         if (!m_db.open()) {
-            qCritical() << "Failed to open database:" << m_db.lastError().text();
+            qCritical() << "Failed to open embeddings database:" << m_db.lastError().text();
         }
     }
     
@@ -281,12 +288,92 @@ private:
     QSqlDatabase m_db;
 };
 
+class ConversationDatabase
+{
+public:
+    ConversationDatabase(const QString &dbName = "conversations.db")
+    {
+        m_db = QSqlDatabase::addDatabase("QSQLITE", "conversations");
+        m_db.setDatabaseName(dbName);
+        
+        if (!m_db.open()) {
+            qCritical() << "Failed to open conversations database:" << m_db.lastError().text();
+            return;
+        }
+        
+        initializeSchema();
+    }
+    
+    bool logConversation(const QVector<float> &queryEmbedding,
+                        const QString &query,
+                        const QString &researchResponse,
+                        const QString &roleplayResponse = "")
+    {
+        QSqlQuery insertQuery(m_db);
+        insertQuery.prepare(
+            "INSERT INTO conversations (query, query_embedding, research_response, roleplay_response, timestamp) "
+            "VALUES (:query, :query_embedding, :research_response, :roleplay_response, datetime('now'))"
+        );
+        
+        // Convert embedding to binary blob
+        QByteArray embBlob(reinterpret_cast<const char*>(queryEmbedding.constData()),
+                          queryEmbedding.size() * sizeof(float));
+        
+        insertQuery.addBindValue(query);
+        insertQuery.addBindValue(embBlob);
+        insertQuery.addBindValue(researchResponse);
+        insertQuery.addBindValue(roleplayResponse);
+        
+        if (!insertQuery.exec()) {
+            qWarning() << "Failed to log conversation:" << insertQuery.lastError().text();
+            return false;
+        }
+        
+        return true;
+    }
+    
+    bool isInitialized() const
+    {
+        QSqlQuery query(m_db);
+        query.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='conversations'");
+        return query.exec() && query.next();
+    }
+
+private:
+    void initializeSchema()
+    {
+        QSqlQuery query(m_db);
+        
+        // Create conversations table if it doesn't exist
+        if (!query.exec(
+            "CREATE TABLE IF NOT EXISTS conversations ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "query TEXT NOT NULL,"
+            "query_embedding BLOB,"
+            "research_response TEXT,"
+            "roleplay_response TEXT,"
+            "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        )) {
+            qCritical() << "Failed to create conversations table:" << query.lastError().text();
+        }
+        
+        // Create index on timestamp for efficient queries
+        if (!query.exec("CREATE INDEX IF NOT EXISTS idx_timestamp ON conversations(timestamp)")) {
+            qCritical() << "Failed to create timestamp index:" << query.lastError().text();
+        }
+    }
+
+    QSqlDatabase m_db;
+};
+
 class RAGBot
 {
 public:
     RAGBot(const QString &embedModelPath, EmbeddingDatabase *db, 
+           ConversationDatabase *convDb,
            const RemoteLLMConfig &llmConfig, const RoleplayConfig &rpConfig)
-        : m_embedModelPath(embedModelPath), m_db(db), 
+        : m_embedModelPath(embedModelPath), m_db(db), m_convDb(convDb),
           m_llmConfig(llmConfig), m_rpConfig(rpConfig),
           m_embedModel(nullptr), m_embedCtx(nullptr), 
           m_remoteLLM(nullptr), m_roleplayLLM(nullptr)
@@ -494,6 +581,8 @@ private:
             return;
         }
         
+        QString roleplayAnswer;
+        
         // Stage 2: Roleplay response
         if (m_rpConfig.enabled && m_roleplayLLM) {
             qInfo() << "m_rpConfig.enabled";
@@ -509,20 +598,11 @@ private:
                 qWarning() << "Failed to open roleplayPrompt.txt";
             }
             
-            qDebug() << rp;
-
-            QString roleplayPrompt = rp.arg(m_rpConfig.characterName, researchAnswer, question);
-
-#if 0
-            qDebug() << m_rpConfig.characterName;
-            qDebug() << question;
-            qDebug() << researchAnswer;
-
+            QString roleplayPrompt = rp.arg(researchAnswer, question);
             qDebug() << roleplayPrompt;
-#endif
             
             QTextStream(stdout) << "\n" << m_rpConfig.characterName << ": " << Qt::flush;
-            QString roleplayAnswer = m_roleplayLLM->chat(
+            roleplayAnswer = m_roleplayLLM->chat(
                 m_rpConfig.characterBackground, 
                 roleplayPrompt, 
                 true
@@ -532,6 +612,11 @@ private:
             if (roleplayAnswer.isEmpty()) {
                 qWarning() << "No response from roleplay LLM";
             }
+        }
+        
+        // Log conversation to database
+        if (!m_convDb->logConversation(queryEmb, question, researchAnswer, roleplayAnswer)) {
+            qWarning() << "Failed to log conversation to database";
         }
     }
     
@@ -551,6 +636,7 @@ private:
 private:
     QString m_embedModelPath;
     EmbeddingDatabase *m_db;
+    ConversationDatabase *m_convDb;
     RemoteLLMConfig m_llmConfig;
     RoleplayConfig m_rpConfig;
     RemoteLLMClient *m_remoteLLM;
@@ -566,6 +652,7 @@ int main(int argc, char *argv[])
     
     QString embedModelPath = QDir::homePath() + "/.ollama/models/blobs/nomic-embed-text-v1.5.f32.gguf";
     QString dbPath = "embeddings.db";
+    QString convDbPath = "conversations.db";
     
     if (!QFile::exists(embedModelPath)) {
         qCritical() << "Embedding model not found:" << embedModelPath;
@@ -584,32 +671,22 @@ int main(int argc, char *argv[])
     llmConfig.model = "llama-3.2-8B-Instruct";
     llmConfig.timeout = 4 * 60000;
     
+    // Configure roleplay
     RoleplayConfig rpConfig;
-    QFile survivorPromptFile("survivorPrompt.txt");
-    QString sp;
-    
-    if (survivorPromptFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        sp = QString::fromUtf8(survivorPromptFile.readAll());
-        survivorPromptFile.close();
-    } else {
-        qWarning() << "Failed to open survivorPrompt.txt";
-    }
-
-    rpConfig.enabled = true;  // Set to false to disable roleplay
+    rpConfig.enabled = true;
     rpConfig.characterName = "Survivor";
-    rpConfig.characterBackground = sp;
-
+    
+    if (!rpConfig.loadFromFile("characterBackground.txt")) {
+        qWarning() << "Failed to load character background from file, using default";
+        rpConfig.characterBackground = "You are a survivor in the post-apocalyptic world of Cataclysm: Dark Days Ahead.";
+    }
+    
     rpConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8B-Instruct";
     rpConfig.model = "llama-3.2-8B-Instruct";
-
-#if 0
-    rpConfig.baseUrl = "http://192.168.0.97:8080/upstream/mistral-7b-instruct";
-    rpConfig.model = "mistral-7b-instruct";
-#endif
     
-
     EmbeddingDatabase db(dbPath);
-    RAGBot bot(embedModelPath, &db, llmConfig, rpConfig);
+    ConversationDatabase convDb(convDbPath);
+    RAGBot bot(embedModelPath, &db, &convDb, llmConfig, rpConfig);
     
     QTimer::singleShot(0, [&bot]() {
         bot.startChatLoop();
