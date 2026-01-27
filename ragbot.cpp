@@ -570,7 +570,7 @@ private:
         if (m_llmConfig.enabled) {
             qInfo() << "m_llmConfig.enabled";
             QTextStream(stdout) << "\nBot (Research): " << Qt::flush;
-            researchAnswer = m_remoteLLM->chat("", researchPrompt, true);
+            researchAnswer = m_remoteLLM->chat("", researchPrompt, false);
             QTextStream(stdout) << "\n" << Qt::flush;
         } else {
             qDebug() << "Would call local research model here";
@@ -606,7 +606,7 @@ private:
             roleplayAnswer = m_roleplayLLM->chat(
                 m_rpConfig.characterBackground, 
                 roleplayPrompt, 
-                true
+                true 
             );
             QTextStream(stdout) << "\n" << Qt::flush;
             
