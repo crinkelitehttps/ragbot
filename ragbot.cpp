@@ -23,9 +23,9 @@
 // Configuration for remote LLM
 struct RemoteLLMConfig {
     bool enabled = false;
-    QString baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8B-Instruct";
-    QString model = "llama-3.2-8B-Instruct";
-    int timeout = 4 * 60000;
+    QString baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8b-instruct";
+    QString model = "llama-3.2-8b-instruct";
+    int timeout = 60000;
 };
 
 // Configuration for roleplay
@@ -33,8 +33,8 @@ struct RoleplayConfig {
     bool enabled = true;
     QString characterName = "Survivor";
     QString characterBackground = "";
-    QString baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8B-Instruct";
-    QString model = "llama-3.2-8B-Instruct";
+    QString baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8b-instruct";
+    QString model = "llama-3.2-8b-instruct";
     
     bool loadFromFile(const QString &filePath) {
         QFile file(filePath);
@@ -70,7 +70,7 @@ public:
         delete m_manager;
     }
 
-    QString chat(const QString &systemPrompt, const QString &userMessage, bool stream = false)
+    QString chat(const QString &systemPrompt, const QString &userMessage, bool stream)
     {
         QJsonObject request;
         request["model"] = m_config.model;
@@ -92,7 +92,7 @@ public:
         
         request["messages"] = messages;
         request["temperature"] = 0.7;
-        request["max_tokens"] = 2000;
+        request["max_tokens"] = 20000;
         
         QJsonDocument doc(request);
         QByteArray jsonData = doc.toJson();
@@ -112,6 +112,7 @@ public:
         QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
         timer.start(m_config.timeout);
         
+        qDebug() << "stream"<< stream;
         if (stream) {
             QString fullResponse;
             QObject::connect(reply, &QNetworkReply::readyRead, [&]() {
@@ -667,8 +668,8 @@ int main(int argc, char *argv[])
     // Configure research LLM
     RemoteLLMConfig llmConfig;
     llmConfig.enabled = true;
-    llmConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8B-Instruct";
-    llmConfig.model = "llama-3.2-8B-Instruct";
+    llmConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8b-instruct";
+    llmConfig.model = "llama-3.2-8b-instruct";
     llmConfig.timeout = 4 * 60000;
     
     // Configure roleplay
@@ -681,8 +682,8 @@ int main(int argc, char *argv[])
         rpConfig.characterBackground = "You are a survivor in the post-apocalyptic world of Cataclysm: Dark Days Ahead.";
     }
     
-    rpConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8B-Instruct";
-    rpConfig.model = "llama-3.2-8B-Instruct";
+    rpConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8b-instruct";
+    rpConfig.model = "llama-3.2-8b-instruct";
     
     EmbeddingDatabase db(dbPath);
     ConversationDatabase convDb(convDbPath);

@@ -11,7 +11,7 @@ SOURCES += ragbot.cpp
 # Include paths
 # Force Qt from home directory, NOT system repos
 
-QT_ROOT = $${HOME_DIR}/Qt/5.15.2/gcc_64
+QT_ROOT = /home/joe/Qt/5.15.2/gcc_64
 
 message("Using Qt from: $QT_ROOT")
 
