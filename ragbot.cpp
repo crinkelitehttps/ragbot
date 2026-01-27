@@ -599,14 +599,14 @@ private:
                 qWarning() << "Failed to open roleplayPrompt.txt";
             }
             
-            QString roleplayPrompt = rp.arg(researchAnswer, question);
+            QString roleplayPrompt = rp.arg("Survivor", researchAnswer, question);
             qDebug() << roleplayPrompt;
             
             QTextStream(stdout) << "\n" << m_rpConfig.characterName << ": " << Qt::flush;
             roleplayAnswer = m_roleplayLLM->chat(
-                m_rpConfig.characterBackground, 
-                roleplayPrompt, 
-                true 
+                m_rpConfig.characterBackground,
+                roleplayPrompt,
+                true
             );
             QTextStream(stdout) << "\n" << Qt::flush;
             
