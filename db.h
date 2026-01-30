@@ -1,10 +1,12 @@
-
+#ifndef DB_H
+#define DB_H
 #include <QCoreApplication>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDebug>
 #include <cmath>
+
 class ConversationDatabase
 {
 public:
@@ -169,3 +171,4 @@ private:
 
     QSqlDatabase m_db;
 };
+#endif //DB_H

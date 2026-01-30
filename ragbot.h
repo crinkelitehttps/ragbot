@@ -1,3 +1,6 @@
+#ifndef RAGBOT_H
+#define RAGBOT_H
+
 #include <QCoreApplication>
 #include "db.h"
 #include "llama.h"
@@ -470,3 +473,4 @@ private:
     RoleplayConfig m_rpConfig;
     
 };
+#endif // RAGBOT_H
