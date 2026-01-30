@@ -6,7 +6,9 @@ CONFIG -= app_bundle
 CONFIG += debug
 CONFIG -= release
 
-SOURCES += ragbot.cpp
+HEADERS += ragbot.h
+HEADERS += db.h
+SOURCES += main.cpp
 
 # Include paths
 # Force Qt from home directory, NOT system repos
