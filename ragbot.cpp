@@ -600,7 +600,7 @@ private:
             }
             
             QString roleplayPrompt = rp.arg("Survivor", researchAnswer, question);
-            qDebug() << roleplayPrompt;
+            qDebug() << "thinking";
             
             QTextStream(stdout) << "\n" << m_rpConfig.characterName << ": " << Qt::flush;
             roleplayAnswer = m_roleplayLLM->chat(
@@ -639,13 +639,14 @@ private:
     EmbeddingDatabase *m_db;
     ConversationDatabase *m_convDb;
     RemoteLLMConfig m_llmConfig;
-    RoleplayConfig m_rpConfig;
-    RemoteLLMClient *m_remoteLLM;
-    RemoteLLMClient *m_roleplayLLM;
-    
     llama_model *m_embedModel;
     llama_context *m_embedCtx;
+    RemoteLLMClient *m_remoteLLM;
+    RemoteLLMClient *m_roleplayLLM;
+    RoleplayConfig m_rpConfig;
+    
 };
+
 
 int main(int argc, char *argv[])
 {
@@ -665,11 +666,43 @@ int main(int argc, char *argv[])
         return 1;
     }
     
+    bool isLocal{ true };
+    QString host;
+    QString model;
+
+    for (int i = 1; i < argc; i++) {
+        if (QString(argv[i]).startsWith("-m") && argv[i+1]) {
+            i++;
+            qDebug() << "got arg" << argv[i];
+            model = argv[i];
+            break;
+        }
+        if (QString(argv[i]).startsWith("-l")) {
+            qDebug() << "is local";
+            isLocal = true;
+            break;
+        }
+    }
+    if (model.isEmpty()) {
+        qDebug() << "did not get model arg";
+        return 0;
+    }
+
     // Configure research LLM
     RemoteLLMConfig llmConfig;
+
+    if (isLocal) {
+        host = "http://192.168.0.97:8080/upstream/";
+    } else {
+        host = "http://127.0.0.1:8080/upstream/";
+    }
+
+    const auto url = model;
+
     llmConfig.enabled = true;
-    llmConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8b-instruct";
-    llmConfig.model = "llama-3.2-8b-instruct";
+    llmConfig.baseUrl = QStringLiteral("%1%2").arg(host).arg(model);
+    llmConfig.model = model;
+
     llmConfig.timeout = 4 * 60000;
     
     // Configure roleplay
@@ -682,8 +715,14 @@ int main(int argc, char *argv[])
         rpConfig.characterBackground = "You are a survivor in the post-apocalyptic world of Cataclysm: Dark Days Ahead.";
     }
     
-    rpConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8b-instruct";
-    rpConfig.model = "llama-3.2-8b-instruct";
+    if (model.isEmpty()) {
+        rpConfig.baseUrl = QString("%1%2").arg(host).arg(model);
+        rpConfig.model = model;
+    } else {
+        rpConfig.baseUrl = "http://127.0.0.1:8080/upstream/llama-3.2-1b";
+        rpConfig.model = "llama-3.2-1b";
+    }
+
     
     EmbeddingDatabase db(dbPath);
     ConversationDatabase convDb(convDbPath);

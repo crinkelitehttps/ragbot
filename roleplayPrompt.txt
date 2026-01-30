@@ -6,6 +6,7 @@ The following are things you know from experience, rumor, or observation:
 Someone asks you:
 "%3"
 
+Never say Document
 Answer as if you are speaking directly to them.
 Do not explain more than you would naturally say out loud.
 Stay in character at all times.
