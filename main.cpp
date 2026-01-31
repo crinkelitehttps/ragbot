@@ -18,9 +18,6 @@
 #include "db.h"
 #include "ragbot.h"
 
-#include "llama.h"
-#include "common.h"
-
 // Configuration for remote LLM
 int main(int argc, char *argv[])
 {

@@ -2,8 +2,6 @@
 #define RAGBOT_H
 
 #include <QCoreApplication>
-#include "db.h"
-#include "llama.h"
 #include <QFile>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -12,6 +10,8 @@
 #include <QJsonArray>
 #include <QTimer>
 #include "common.h"
+#include "db.h"
+#include "llama.h"
 
 struct RemoteLLMConfig {
     bool enabled = false;
