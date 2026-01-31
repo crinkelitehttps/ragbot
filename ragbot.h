@@ -50,6 +50,20 @@ public:
     RemoteLLMClient(const RemoteLLMConfig &config)
         : m_config(config), m_manager(new QNetworkAccessManager())
     {
+        if (m_llmConfig.enabled) {
+            m_remoteLLM = new RemoteLLMClient(m_llmConfig);
+            qDebug() << "Research LLM enabled:" << m_llmConfig.baseUrl;
+        } else {
+            qDebug() << "Research LLM disabled - would use local models";
+        }
+        
+        if (m_rpConfig.enabled) {
+            m_roleplayLLM = new RemoteLLMClient(m_rpConfig.baseUrl, m_rpConfig.model, 60000);
+            qDebug() << "Roleplay LLM enabled:" << m_rpConfig.baseUrl;
+            qDebug() << "Character:" << m_rpConfig.characterName;
+        } else {
+            qDebug() << "Roleplay mode disabled";
+        }
     }
     
     RemoteLLMClient(const QString &baseUrl, const QString &model, int timeout = 60000)
