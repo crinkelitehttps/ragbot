@@ -52,9 +52,9 @@ int main(int argc, char *argv[])
     RemoteLLMConfig llmConfig;
 
     if (isLocal) {
-        host = "http://192.168.0.97:8080/upstream/";
-    } else {
         host = "http://127.0.0.1:8080/upstream/";
+    } else {
+        host = "http://192.168.0.97:8080/upstream/";
     }
 
     const auto url = model;

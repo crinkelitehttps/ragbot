@@ -9,9 +9,13 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QTimer>
-#include "common.h"
 #include "db.h"
 #include "llama.h"
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#include "common.h" // warnings from 3rd party libs
+#pragma GCC diagnostic pop
 
 struct RemoteLLMConfig {
     bool enabled = false;
@@ -198,28 +202,24 @@ private:
 class RAGBot
 {
 public:
-    RAGBot(const QString &embedModelPath, EmbeddingDatabase *db, 
-           ConversationDatabase *convDb,
-           const RemoteLLMConfig &llmConfig, const RoleplayConfig &rpConfig)
-        : m_embedModelPath(embedModelPath), m_db(db), m_convDb(convDb),
-          m_llmConfig(llmConfig), m_rpConfig(rpConfig),
-          m_embedModel(nullptr), m_embedCtx(nullptr), 
-          m_remoteLLM(nullptr), m_roleplayLLM(nullptr)
+    RAGBot(
+            const QString &embedModelPath,
+            EmbeddingDatabase *db, 
+            ConversationDatabase *convDb,
+            const RemoteLLMConfig &llmConfig,
+            const RoleplayConfig &rpConfig
+            )
+        : m_embedModelPath(embedModelPath)
+        , m_db(db)
+        , m_convDb(convDb)
+        , m_llmConfig(llmConfig)
+        , m_embedModel(nullptr)
+        , m_embedCtx(nullptr) 
+        , m_remoteLLM(nullptr)
+        , m_roleplayLLM(nullptr)
+        , m_rpConfig(rpConfig)
     {
-        if (m_llmConfig.enabled) {
-            m_remoteLLM = new RemoteLLMClient(m_llmConfig);
-            qDebug() << "Research LLM enabled:" << m_llmConfig.baseUrl;
-        } else {
-            qDebug() << "Research LLM disabled - would use local models";
-        }
-        
-        if (m_rpConfig.enabled) {
-            m_roleplayLLM = new RemoteLLMClient(m_rpConfig.baseUrl, m_rpConfig.model, 60000);
-            qDebug() << "Roleplay LLM enabled:" << m_rpConfig.baseUrl;
-            qDebug() << "Character:" << m_rpConfig.characterName;
-        } else {
-            qDebug() << "Roleplay mode disabled";
-        }
+        qDebug() << "RAGBot()\n" << m_embedModelPath << m_rpConfig.characterName;
     }
     
     ~RAGBot()
@@ -237,6 +237,7 @@ public:
             if (level == GGML_LOG_LEVEL_ERROR) {
                 fprintf(stderr, "%s", text);
             }
+            Q_UNUSED(user_data)
         }, nullptr);
         
         llama_backend_init();
@@ -314,7 +315,7 @@ private:
         std::vector<llama_token> tokens = common_tokenize(m_embedCtx, text.toStdString(), true);
         if (tokens.empty()) return {};
         
-        int max_tokens = llama_n_ctx(m_embedCtx) - 10;
+        unsigned int max_tokens = llama_n_ctx(m_embedCtx) - 10;
         if (tokens.size() > max_tokens) {
             tokens.resize(max_tokens);
         }
