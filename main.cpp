@@ -1,16 +1,5 @@
 #include <QCoreApplication>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <QNetworkAccessManager>
-#include <QNetworkRequest>
-#include <QNetworkReply>
-#include <QSqlDatabase>
-#include <QSqlQuery>
-#include <QSqlError>
-#include <QTextStream>
 #include <QDebug>
-#include <QEventLoop>
 #include <QTimer>
 #include <QDir>
 #include <QFile>
