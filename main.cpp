@@ -16,6 +16,29 @@ int main(int argc, char *argv[])
     QString embedModelPath = QDir::homePath() + "/.ollama/models/blobs/nomic-embed-text-v1.5.f32.gguf";
     QString dbPath = "embeddings.db";
     QString convDbPath = "conversations.db";
+
+    bool isLocal{};
+
+    QString model;
+
+    for (int i = 1; i < argc; i++) {
+        if (QString(argv[i]).startsWith("-m") && argv[i+1]) {
+            i++;
+            qDebug() << "got arg" << argv[i];
+            model = argv[i];
+            break;
+        } 
+        if (QString(argv[i]).startsWith("-l")) {
+            isLocal = true;
+            break;
+        };
+    }
+
+    isLocal = true;
+
+    const QString port = "8080";
+    const QString host = isLocal ? "127.0.0.1" : "192.168.0.97";
+    const QString url = QString("http://%1:%2/upstream/%3/").arg(host).arg(port).arg(model);
     
     if (!QFile::exists(embedModelPath)) {
         qCritical() << "Embedding model not found:" << embedModelPath;
@@ -30,8 +53,8 @@ int main(int argc, char *argv[])
     // Configure research LLM
     RemoteLLMConfig llmConfig;
     llmConfig.enabled = true;
-    llmConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8b-instruct";
-    llmConfig.model = "llama-3.2-8b-instruct";
+    llmConfig.baseUrl = url;
+    llmConfig.model = model;
     llmConfig.timeout = 4 * 60000;
     
     // Configure roleplay
@@ -44,8 +67,8 @@ int main(int argc, char *argv[])
         rpConfig.characterBackground = "You are a survivor in the post-apocalyptic world of Cataclysm: Dark Days Ahead.";
     }
     
-    rpConfig.baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8b-instruct";
-    rpConfig.model = "llama-3.2-8b-instruct";
+    rpConfig.baseUrl = url;
+    rpConfig.model = model;
     
     EmbeddingDatabase db(dbPath);
     ConversationDatabase convDb(convDbPath);

@@ -57,7 +57,7 @@ QString RemoteLLMClient::chat(const QString &systemPrompt, const QString &userMe
     QByteArray jsonData = doc.toJson();
     
     QNetworkRequest netRequest;
-    netRequest.setUrl(QUrl(m_config.baseUrl + "/v1/chat/completions"));
+    netRequest.setUrl(QUrl(m_config.baseUrl + "v1/chat/completions"));
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     netRequest.setTransferTimeout(m_config.timeout);
     
