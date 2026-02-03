@@ -62,11 +62,13 @@ int main(int argc, char *argv[])
     rpConfig.enabled = true;
     rpConfig.characterName = "Survivor";
     
+#if 0
     if (!rpConfig.loadFromFile("characterBackground.txt")) {
         qWarning() << "Failed to load character background from file, using default";
-        rpConfig.characterBackground = "You are a survivor in the post-apocalyptic world of Cataclysm: Dark Days Ahead.";
+        rpConfig.characterBackground = "";
     }
-    
+#endif
+
     rpConfig.baseUrl = url;
     rpConfig.model = model;
     

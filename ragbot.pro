@@ -10,7 +10,8 @@ SOURCES += main.cpp \
     RAGBot.cpp \
     RemoteLLMClient.cpp \
     EmbeddingDatabase.cpp \
-    ConversationDatabase.cpp
+    ConversationDatabase.cpp \
+    Embedder.cpp
 
 # Header files
 HEADERS += RAGBot.h \
@@ -18,7 +19,8 @@ HEADERS += RAGBot.h \
     RemoteLLMConfig.h \
     RoleplayConfig.h \
     EmbeddingDatabase.h \
-    ConversationDatabase.h
+    ConversationDatabase.h \
+    Embedder.h
 
 # Include paths
 # Force Qt from home directory, NOT system repos

@@ -1,14 +1,8 @@
 You are %1.
 
-The following are things you know from experience, rumor, or observation:
+here is some factual infomation to help you answer the question:
 %2
 
 Someone asks you:
 "%3"
-
-Answer as if you are speaking directly to them.
-Do not explain more than you would naturally say out loud.
-Stay in character at all times.
-You rarely speak more than necessary.
-Assume the listener is also a survivor, not a newcommer.
 
