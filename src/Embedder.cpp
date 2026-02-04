@@ -68,6 +68,7 @@ QVector<float> RemoteEmbedder::generateEmbedding(const QString &text)
     return embedding;
 };
 
+//--------------------------------------------------------------------------------
 bool EmbeddingDatabase::saveEmbedding(const QString &sourceFile, const QString &itemId, 
                       const QString &content, const QVector<float> &embedding) 
 {
@@ -90,6 +91,7 @@ bool EmbeddingDatabase::saveEmbedding(const QString &sourceFile, const QString &
     
 };
 
+//--------------------------------------------------------------------------------
 int EmbeddingDatabase::count()
 {
     QSqlQuery query("SELECT COUNT(*) FROM embeddings", m_db);
@@ -99,6 +101,7 @@ int EmbeddingDatabase::count()
     return 0;
 };
 
+//--------------------------------------------------------------------------------
 void RemoteEmbedder::processAllFiles()
 {
     {
@@ -132,10 +135,7 @@ void RemoteEmbedder::processAllFiles()
     }
 };
 
-#if 1
-#endif
-
-
+//--------------------------------------------------------------------------------
 bool RemoteEmbedder::embedFile(const QString &inputPath) 
 {
     QFile file(inputPath);
@@ -179,6 +179,7 @@ bool RemoteEmbedder::embedFile(const QString &inputPath)
 
 };
 
+//--------------------------------------------------------------------------------
 QString RemoteEmbedder::extractTextFromJson(const QJsonValue &value, const QStringList &keys) 
 {
     QStringList texts;
@@ -186,6 +187,7 @@ QString RemoteEmbedder::extractTextFromJson(const QJsonValue &value, const QStri
     return texts.join(" ");
 };
 
+//--------------------------------------------------------------------------------
 void RemoteEmbedder::extractTextRecursive(const QJsonValue &value, const QStringList &keys, QStringList &texts)
 {
     if (value.isObject()) {
@@ -224,6 +226,7 @@ void RemoteEmbedder::extractTextRecursive(const QJsonValue &value, const QString
     }
 };
 
+//--------------------------------------------------------------------------------
 bool RemoteEmbedder::embedAndSave(const QString &text, const QString &sourcePath, const QString &itemId) 
 {
    // Use remote embedder

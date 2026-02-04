@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
 
     QString model;
     bool isLocal {};
-    bool isEmbedmode {};
+    bool isEmbedMode {};
 
     for (int i = 1; i < argc; i++) {
         if (QString(argv[i]).startsWith("-m") && argv[i+1]) {
@@ -29,15 +29,13 @@ int main(int argc, char *argv[])
             qDebug() << "Using model" << argv[i];
             model = argv[i];
             break;
-        } 
-        if (QString(argv[i]).startsWith("-l")) {
+        } else if (QString(argv[i]).startsWith("-l")) {
             qDebug() << "Running in local mode";
             isLocal = true;
             break;
-        };
-        if (QString(argv[i]).startsWith("--embed")) {
+        } else if (QString(argv[i]).startsWith("--embed")) {
             qDebug() << "Running in embdedding mode";
-            isEmbedmode = true;
+            isEmbedMode = true;
             break;
         };
     }
@@ -56,10 +54,10 @@ int main(int argc, char *argv[])
         return 1;
     }
      
-    if(isEmbedmode) {
+    if(isEmbedMode) {
         RemoteEmbedConfig embedConfig;
         embedConfig.enabled = true;
-        embedConfig.baseUrl = "";
+        embedConfig.baseUrl = url;
         embedConfig.model = model;
         embedConfig.timeout = 4 * 60000;
         RemoteEmbedder embedder(embedConfig);
