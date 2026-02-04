@@ -3,11 +3,13 @@
 #include <QFile>
 #include <QTimer>
 #include <QDebug>
+
 #include "RAGBot.h"
+#include "Embedder.h"
 #include "db/EmbeddingDatabase.h"
 #include "db/ConversationDatabase.h"
 #include "llm/RemoteLLMConfig.h"
-#include "RoleplayConfig.h"
+#include "config/RoleplayConfig.h"
 
 int main(int argc, char *argv[])
 {
@@ -17,24 +19,28 @@ int main(int argc, char *argv[])
     QString dbPath = "embeddings.db";
     QString convDbPath = "conversations.db";
 
-    bool isLocal{};
-
     QString model;
+    bool isLocal {};
+    bool isEmbedmode {};
 
     for (int i = 1; i < argc; i++) {
         if (QString(argv[i]).startsWith("-m") && argv[i+1]) {
             i++;
-            qDebug() << "got arg" << argv[i];
+            qDebug() << "Using model" << argv[i];
             model = argv[i];
             break;
         } 
         if (QString(argv[i]).startsWith("-l")) {
+            qDebug() << "Running in local mode";
             isLocal = true;
             break;
         };
+        if (QString(argv[i]).startsWith("--embed")) {
+            qDebug() << "Running in embdedding mode";
+            isEmbedmode = true;
+            break;
+        };
     }
-
-    isLocal = true;
 
     const QString port = "8080";
     const QString host = isLocal ? "127.0.0.1" : "192.168.0.97";
@@ -49,6 +55,19 @@ int main(int argc, char *argv[])
         qCritical() << "Database not found:" << dbPath;
         return 1;
     }
+     
+    if(isEmbedmode) {
+        RemoteEmbedConfig embedConfig;
+        embedConfig.enabled = true;
+        embedConfig.baseUrl = "";
+        embedConfig.model = model;
+        embedConfig.timeout = 4 * 60000;
+        RemoteEmbedder embedder(embedConfig);
+        QTimer::singleShot(0, [&embedder]() {
+            embedder.processAllFiles();
+            qDebug() << "Finished embeddings";
+        });
+    };
     
     // Configure research LLM
     RemoteLLMConfig llmConfig;
@@ -62,12 +81,10 @@ int main(int argc, char *argv[])
     rpConfig.enabled = true;
     rpConfig.characterName = "Survivor";
     
-#if 0
     if (!rpConfig.loadFromFile("characterBackground.txt")) {
         qWarning() << "Failed to load character background from file, using default";
         rpConfig.characterBackground = "";
     }
-#endif
 
     rpConfig.baseUrl = url;
     rpConfig.model = model;

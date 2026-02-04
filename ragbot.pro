@@ -9,20 +9,20 @@ CONFIG -= release
 SOURCES += \
     src/main.cpp \
     src/RAGBot.cpp \
+    src/Embedder.cpp \
     src/llm/RemoteLLMClient.cpp \
     src/db/EmbeddingDatabase.cpp \
-    src/db/ConversationDatabase.cpp \
-    src/Embedder.cpp
+    src/db/ConversationDatabase.cpp
 
 # Header files
 HEADERS += \
     src/RAGBot.h \
+    src/Embedder.h \
     src/llm/RemoteLLMClient.h \
     src/llm/RemoteLLMConfig.h \
-    src/RoleplayConfig.h \
     src/db/EmbeddingDatabase.h \
     src/db/ConversationDatabase.h \
-    src/Embedder.h
+    src/config/RoleplayConfig.h 
 
 # Include paths
 # Force Qt from home directory, NOT system repos

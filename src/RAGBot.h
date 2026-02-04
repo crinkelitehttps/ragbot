@@ -7,7 +7,7 @@
 #include "db/ConversationDatabase.h"
 #include "llm/RemoteLLMClient.h"
 #include "llm/RemoteLLMConfig.h"
-#include "RoleplayConfig.h"
+#include "config/RoleplayConfig.h"
 #include "llama.h"
 
 class RAGBot

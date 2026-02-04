@@ -1,5 +1,6 @@
 // Modified to use local llama-swap embedding server
 #include "Embedder.h"
+#include "db/EmbeddingDatabase.h"
 
 //--------------------------------------------------------------------------------
 QVector<float> RemoteEmbedder::generateEmbedding(const QString &text) 
@@ -150,8 +151,8 @@ bool RemoteEmbedder::embedFile(const QString &inputPath)
     
     if (doc.isArray()) {
         QJsonArray arr = doc.array();
-        int success = 0;
-        
+        std::atomic<int> success = 0;
+
         for (int i = 0; i < arr.size(); i++) {
             QJsonValue item = arr[i];
             QString itemId = "item_" + QString::number(i);
