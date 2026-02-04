@@ -3,10 +3,10 @@
 
 #include <QString>
 #include <QVector>
-#include "EmbeddingDatabase.h"
-#include "ConversationDatabase.h"
-#include "RemoteLLMClient.h"
-#include "RemoteLLMConfig.h"
+#include "db/EmbeddingDatabase.h"
+#include "db/ConversationDatabase.h"
+#include "llm/RemoteLLMClient.h"
+#include "llm/RemoteLLMConfig.h"
 #include "RoleplayConfig.h"
 #include "llama.h"
 
@@ -34,9 +34,8 @@ private:
     RoleplayConfig m_rpConfig;
     RemoteLLMClient *m_remoteLLM;
     RemoteLLMClient *m_roleplayLLM;
-    
-    llama_model *m_embedModel;
     llama_context *m_embedCtx;
+    llama_model *m_embedModel;
 };
 
 #endif // RAGBOT_H

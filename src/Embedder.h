@@ -83,22 +83,6 @@ private:
 class RemoteEmbedder
 {
 public:
-#if 0
-    class JsonEmbedder
-    {
-    public:
-        JsonEmbedder(const QString &jsonDir, EmbeddingDatabase *db)
-            : m_jsonDir(jsonDir)
-            , m_db(db)
-        {
-        }
-        
-    
-    private:
-    private:
-    };
-#endif
-
     RemoteEmbedder(const RemoteEmbedConfig &config)
         : m_config(config), m_manager(new QNetworkAccessManager())
     {
@@ -122,14 +106,12 @@ public:
         EmbeddingDatabase db("embeddings.db");
         RemoteEmbedder remoteEmbed(embedConfig);
     
-#if 1
-        
         QTimer::singleShot(0, [&]() {
             processAllFiles();
         });
-#endif
+
         QString m_jsonDir;
-        EmbeddingDatabase *m_db;
+
     }
     
     QString extractTextFromJson(const QJsonValue &value, const QStringList &keys);

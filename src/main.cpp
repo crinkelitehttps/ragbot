@@ -4,9 +4,9 @@
 #include <QTimer>
 #include <QDebug>
 #include "RAGBot.h"
-#include "EmbeddingDatabase.h"
-#include "ConversationDatabase.h"
-#include "RemoteLLMConfig.h"
+#include "db/EmbeddingDatabase.h"
+#include "db/ConversationDatabase.h"
+#include "llm/RemoteLLMConfig.h"
 #include "RoleplayConfig.h"
 
 int main(int argc, char *argv[])

@@ -3,15 +3,32 @@
 #include <QDebug>
 #include <QCoreApplication>
 #include <QFile>
+// llama_silenced.h
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+
 #include "common.h"
 
-RAGBot::RAGBot(const QString &embedModelPath, EmbeddingDatabase *db, 
-       ConversationDatabase *convDb,
-       const RemoteLLMConfig &llmConfig, const RoleplayConfig &rpConfig)
-    : m_embedModelPath(embedModelPath), m_db(db), m_convDb(convDb),
-      m_llmConfig(llmConfig), m_rpConfig(rpConfig),
-      m_embedModel(nullptr), m_embedCtx(nullptr), 
-      m_remoteLLM(nullptr), m_roleplayLLM(nullptr)
+#pragma GCC diagnostic pop
+
+
+RAGBot::RAGBot(
+        const QString &embedModelPath,
+        EmbeddingDatabase *db, 
+        ConversationDatabase *convDb,
+        const RemoteLLMConfig &llmConfig,
+        const RoleplayConfig &rpConfig
+    )
+    : m_embedModelPath(embedModelPath)
+    , m_db(db)
+    , m_convDb(convDb)
+    , m_llmConfig(llmConfig)
+    , m_rpConfig(rpConfig)
+    , m_remoteLLM(nullptr)
+    , m_roleplayLLM(nullptr)
+    , m_embedCtx(nullptr)
+    , m_embedModel(nullptr)
 {
     if (m_llmConfig.enabled) {
         m_remoteLLM = new RemoteLLMClient(m_llmConfig);
@@ -41,6 +58,7 @@ bool RAGBot::initialize()
     qDebug() << "Initializing embedding model...";
     
     llama_log_set([](ggml_log_level level, const char * text, void * user_data) {
+        Q_UNUSED(user_data)
         if (level == GGML_LOG_LEVEL_ERROR) {
             fprintf(stderr, "%s", text);
         }
@@ -120,7 +138,7 @@ QVector<float> RAGBot::generateEmbedding(const QString &text)
     std::vector<llama_token> tokens = common_tokenize(m_embedCtx, text.toStdString(), true);
     if (tokens.empty()) return {};
     
-    int max_tokens = llama_n_ctx(m_embedCtx) - 10;
+    unsigned int max_tokens = llama_n_ctx(m_embedCtx) - 10;
     if (tokens.size() > max_tokens) {
         tokens.resize(max_tokens);
     }

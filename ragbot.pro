@@ -9,19 +9,19 @@ CONFIG -= release
 SOURCES += \
     src/main.cpp \
     src/RAGBot.cpp \
-    src/RemoteLLMClient.cpp \
-    src/EmbeddingDatabase.cpp \
-    src/ConversationDatabase.cpp \
+    src/llm/RemoteLLMClient.cpp \
+    src/db/EmbeddingDatabase.cpp \
+    src/db/ConversationDatabase.cpp \
     src/Embedder.cpp
 
 # Header files
 HEADERS += \
     src/RAGBot.h \
-    src/RemoteLLMClient.h \
-    src/RemoteLLMConfig.h \
+    src/llm/RemoteLLMClient.h \
+    src/llm/RemoteLLMConfig.h \
     src/RoleplayConfig.h \
-    src/EmbeddingDatabase.h \
-    src/ConversationDatabase.h \
+    src/db/EmbeddingDatabase.h \
+    src/db/ConversationDatabase.h \
     src/Embedder.h
 
 # Include paths
