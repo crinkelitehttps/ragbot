@@ -122,12 +122,10 @@ public:
         EmbeddingDatabase db("embeddings.db");
         RemoteEmbedder remoteEmbed(embedConfig);
     
-#if 0
+#if 1
         
-        embedder(jsonDir, &db, &remoteEmbed);
-        
-        QTimer::singleShot(0, [&embedder]() {
-            embedder.processAllFiles();
+        QTimer::singleShot(0, [&]() {
+            processAllFiles();
         });
 #endif
         QString m_jsonDir;

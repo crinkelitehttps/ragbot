@@ -131,13 +131,7 @@ void RemoteEmbedder::processAllFiles()
     }
 };
 
-#if 0
-QString RemoteEmbedder::JsonEmbedder::extractTextFromJson(const QJsonValue &value, const QStringList &keys) 
-{
-    QStringList texts;
-    extractTextRecursive(value, keys, texts);
-    return texts.join(" ");
-};
+#if 1
 #endif
 
 
@@ -154,7 +148,6 @@ bool RemoteEmbedder::embedFile(const QString &inputPath)
     QStringList keys = {"name", "description", "id", "type", "species", "flags",
                        "messages", "text", "category", "title", "str", "str_sp"};
     
-#if 1
     if (doc.isArray()) {
         QJsonArray arr = doc.array();
         int success = 0;
@@ -182,19 +175,61 @@ bool RemoteEmbedder::embedFile(const QString &inputPath)
         if (text.isEmpty()) text = "empty";
         return embedAndSave(text, inputPath, "");
     }
-#endif
 
 };
 
-#if 2
+QString RemoteEmbedder::extractTextFromJson(const QJsonValue &value, const QStringList &keys) 
+{
+    QStringList texts;
+    extractTextRecursive(value, keys, texts);
+    return texts.join(" ");
+};
+
+void RemoteEmbedder::extractTextRecursive(const QJsonValue &value, const QStringList &keys, QStringList &texts)
+{
+    if (value.isObject()) {
+        QJsonObject obj = value.toObject();
+        for (auto it = obj.begin(); it != obj.end(); ++it) {
+            QString key = it.key();
+            QJsonValue val = it.value();
+            
+            if (keys.contains(key)) {
+                if (val.isString()) {
+                    texts.append(val.toString());
+                } else if (val.isDouble()) {
+                    texts.append(QString::number(val.toDouble()));
+                } else if (val.isObject()) {
+                    QJsonObject nested = val.toObject();
+                    if (nested.contains("str")) {
+                        texts.append(nested["str"].toString());
+                    }
+                } else if (val.isArray()) {
+                    for (const auto &item : val.toArray()) {
+                        if (item.isString()) {
+                            texts.append(item.toString());
+                        }
+                    }
+                }
+            }
+            
+            if (val.isObject() || val.isArray()) {
+                extractTextRecursive(val, keys, texts);
+            }
+        }
+    } else if (value.isArray()) {
+        for (const auto &item : value.toArray()) {
+            extractTextRecursive(item, keys, texts);
+        }
+    }
+};
+
 bool RemoteEmbedder::embedAndSave(const QString &text, const QString &sourcePath, const QString &itemId) 
 {
-       // Use remote embedder
-       QVector<float> embedding = generateEmbedding(text);
-       if (embedding.isEmpty()) {
-           return false;
-       }
-       return m_db->saveEmbedding(sourcePath, itemId, text, embedding);
+   // Use remote embedder
+   QVector<float> embedding = generateEmbedding(text);
+   if (embedding.isEmpty()) {
+       return false;
+   }
+   return m_db->saveEmbedding(sourcePath, itemId, text, embedding);
 };
-#endif
 
