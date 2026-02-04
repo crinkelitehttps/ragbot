@@ -28,15 +28,12 @@ int main(int argc, char *argv[])
             i++;
             qDebug() << "Using model" << argv[i];
             model = argv[i];
-            break;
         } else if (QString(argv[i]).startsWith("-l")) {
             qDebug() << "Running in local mode";
             isLocal = true;
-            break;
         } else if (QString(argv[i]).startsWith("--embed")) {
             qDebug() << "Running in embdedding mode";
             isEmbedMode = true;
-            break;
         };
     }
 
