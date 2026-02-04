@@ -17,7 +17,7 @@ RAGBot::RAGBot(
         const QString &embedModelPath,
         EmbeddingDatabase *db, 
         ConversationDatabase *convDb,
-        const RemoteLLMConfig &llmConfig,
+        const LLMConfig &llmConfig,
         const RoleplayConfig &rpConfig
     )
     : m_embedModelPath(embedModelPath)
@@ -31,14 +31,14 @@ RAGBot::RAGBot(
     , m_embedModel(nullptr)
 {
     if (m_llmConfig.enabled) {
-        m_remoteLLM = new RemoteLLMClient(m_llmConfig);
+        m_remoteLLM = new LLMClient(m_llmConfig);
         qDebug() << "Research LLM enabled:" << m_llmConfig.baseUrl;
     } else {
         qDebug() << "Research LLM disabled - would use local models";
     }
     
     if (m_rpConfig.enabled) {
-        m_roleplayLLM = new RemoteLLMClient(m_rpConfig.baseUrl, m_rpConfig.model, 60000);
+        m_roleplayLLM = new LLMClient(m_rpConfig.baseUrl, m_rpConfig.model, 60000);
         qDebug() << "Roleplay LLM enabled:" << m_rpConfig.baseUrl;
         qDebug() << "Character:" << m_rpConfig.characterName;
     } else {

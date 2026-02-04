@@ -4,12 +4,12 @@
 
 
 
-RemoteEmbedder::RemoteEmbedder(const RemoteEmbedConfig &config)
+Embedder::Embedder(const EmbedConfig &config)
     : m_config(config)
     , m_manager(new QNetworkAccessManager())
 
 {
-    qDebug() << "RemoteEmbedder::RemoteEmbedder()";
+    qDebug() << "Embedder::Embedder()";
 
     QString jsonDir = QDir::homePath() + "/source/llama-embedder/json";
     
@@ -23,7 +23,7 @@ RemoteEmbedder::RemoteEmbedder(const RemoteEmbedConfig &config)
     qDebug() << "Model:" << config.model;
     
     EmbeddingDatabase db("embeddings.db");
-    RemoteEmbedder remoteEmbed(config);
+    Embedder remoteEmbed(config);
 
     QTimer::singleShot(0, [&]() {
         processAllFiles();
@@ -34,10 +34,10 @@ RemoteEmbedder::RemoteEmbedder(const RemoteEmbedConfig &config)
 }
 
 //--------------------------------------------------------------------------------
-QVector<float> RemoteEmbedder::generateEmbedding(const QString &text) 
+QVector<float> Embedder::generateEmbedding(const QString &text) 
 {
 
-    qDebug() << "RemoteEmbedder::generateEmbedding()";
+    qDebug() << "Embedder::generateEmbedding()";
     QJsonObject request;
     request["model"] = m_config.model;
     request["input"] = text;
@@ -136,7 +136,7 @@ int EmbeddingDatabase::count()
 };
 
 //--------------------------------------------------------------------------------
-void RemoteEmbedder::processAllFiles()
+void Embedder::processAllFiles()
 {
     qDebug() << "EmbeddingDatabase::processAllFiles()";
     {
@@ -171,9 +171,9 @@ void RemoteEmbedder::processAllFiles()
 };
 
 //--------------------------------------------------------------------------------
-bool RemoteEmbedder::embedFile(const QString &inputPath) 
+bool Embedder::embedFile(const QString &inputPath) 
 {
-    qDebug() << "RemoteEmbedder::embedFile()";
+    qDebug() << "Embedder::embedFile()";
     QFile file(inputPath);
     if (!file.open(QIODevice::ReadOnly)) return false;
     
@@ -216,18 +216,18 @@ bool RemoteEmbedder::embedFile(const QString &inputPath)
 };
 
 //--------------------------------------------------------------------------------
-QString RemoteEmbedder::extractTextFromJson(const QJsonValue &value, const QStringList &keys) 
+QString Embedder::extractTextFromJson(const QJsonValue &value, const QStringList &keys) 
 {
-    qDebug() << "RemoteEmbedder::extractTextFromJson()";
+    qDebug() << "Embedder::extractTextFromJson()";
     QStringList texts;
     extractTextRecursive(value, keys, texts);
     return texts.join(" ");
 };
 
 //--------------------------------------------------------------------------------
-void RemoteEmbedder::extractTextRecursive(const QJsonValue &value, const QStringList &keys, QStringList &texts)
+void Embedder::extractTextRecursive(const QJsonValue &value, const QStringList &keys, QStringList &texts)
 {
-    qDebug() << "RemoteEmbedder::extractTextRecursive()";
+    qDebug() << "Embedder::extractTextRecursive()";
     if (value.isObject()) {
         QJsonObject obj = value.toObject();
         for (auto it = obj.begin(); it != obj.end(); ++it) {
@@ -265,9 +265,9 @@ void RemoteEmbedder::extractTextRecursive(const QJsonValue &value, const QString
 };
 
 //--------------------------------------------------------------------------------
-bool RemoteEmbedder::embedAndSave(const QString &text, const QString &sourcePath, const QString &itemId) 
+bool Embedder::embedAndSave(const QString &text, const QString &sourcePath, const QString &itemId) 
 {
-    qDebug() << "RemoteEmbedder::embedAndSave()";
+    qDebug() << "Embedder::embedAndSave()";
     // Use remote embedder
     QVector<float> embedding = generateEmbedding(text);
     if (embedding.isEmpty()) {

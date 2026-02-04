@@ -3,19 +3,19 @@
 
 #include <QString>
 #include <QNetworkAccessManager>
-#include "RemoteLLMConfig.h"
+#include "LLMConfig.h"
 
-class RemoteLLMClient
+class LLMClient
 {
 public:
-    RemoteLLMClient(const RemoteLLMConfig &config);
-    RemoteLLMClient(const QString &baseUrl, const QString &model, int timeout = 60000);
-    ~RemoteLLMClient();
+    LLMClient(const LLMConfig &config);
+    LLMClient(const QString &baseUrl, const QString &model, int timeout = 60000);
+    ~LLMClient();
 
     QString chat(const QString &systemPrompt, const QString &userMessage, bool stream);
 
 private:
-    RemoteLLMConfig m_config;
+    LLMConfig m_config;
     QNetworkAccessManager *m_manager;
 };
 

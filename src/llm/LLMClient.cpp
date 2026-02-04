@@ -1,4 +1,4 @@
-#include "RemoteLLMClient.h"
+#include "LLMClient.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -10,12 +10,12 @@
 #include <QDebug>
 #include <QUrl>
 
-RemoteLLMClient::RemoteLLMClient(const RemoteLLMConfig &config)
+LLMClient::LLMClient(const LLMConfig &config)
     : m_config(config), m_manager(new QNetworkAccessManager())
 {
 }
 
-RemoteLLMClient::RemoteLLMClient(const QString &baseUrl, const QString &model, int timeout)
+LLMClient::LLMClient(const QString &baseUrl, const QString &model, int timeout)
     : m_manager(new QNetworkAccessManager())
 {
     m_config.enabled = true;
@@ -24,12 +24,12 @@ RemoteLLMClient::RemoteLLMClient(const QString &baseUrl, const QString &model, i
     m_config.timeout = timeout;
 }
 
-RemoteLLMClient::~RemoteLLMClient()
+LLMClient::~LLMClient()
 {
     delete m_manager;
 }
 
-QString RemoteLLMClient::chat(const QString &systemPrompt, const QString &userMessage, bool stream)
+QString LLMClient::chat(const QString &systemPrompt, const QString &userMessage, bool stream)
 {
     QJsonObject request;
     request["model"] = m_config.model;

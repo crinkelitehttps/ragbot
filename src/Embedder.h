@@ -22,17 +22,17 @@
 #include "db/EmbeddingDatabase.h"
 
 // Configuration for llama-swap embedding server
-struct RemoteEmbedConfig {
+struct EmbedConfig {
     bool enabled = false;
     QString baseUrl = "http://127.0.0.1:8080";  // llama-swap default port
     QString model = "nomic-embed";  // Model name for llama-swap
     int timeout = 30000;  // 30 seconds
 };
 
-class RemoteEmbedder
+class Embedder
 {
 public:
-    RemoteEmbedder(const RemoteEmbedConfig &config);
+    Embedder(const EmbedConfig &config);
     
     QString extractTextFromJson(const QJsonValue &value, const QStringList &keys);
     void extractTextRecursive(const QJsonValue &value, const QStringList &keys, QStringList &texts);
@@ -40,7 +40,7 @@ public:
     bool embedAndSave(const QString &text, const QString &sourcePath, const QString &itemId);
     void processAllFiles();
 
-    ~RemoteEmbedder()
+    ~Embedder()
     {
         delete m_manager;
     }
@@ -50,7 +50,7 @@ public:
 private:
     QString m_jsonDir;
     EmbeddingDatabase *m_db;
-    RemoteEmbedConfig m_config;
+    EmbedConfig m_config;
     QNetworkAccessManager *m_manager;
 };
 

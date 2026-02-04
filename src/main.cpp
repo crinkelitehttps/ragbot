@@ -8,7 +8,7 @@
 #include "Embedder.h"
 #include "db/EmbeddingDatabase.h"
 #include "db/ConversationDatabase.h"
-#include "llm/RemoteLLMConfig.h"
+#include "llm/LLMConfig.h"
 #include "config/RoleplayConfig.h"
 
 int main(int argc, char *argv[])
@@ -52,12 +52,12 @@ int main(int argc, char *argv[])
     }
      
     if(isEmbedMode) {
-        RemoteEmbedConfig embedConfig;
+        EmbedConfig embedConfig;
         embedConfig.enabled = true;
         embedConfig.baseUrl = url;
         embedConfig.model = model;
         embedConfig.timeout = 4 * 60000;
-        RemoteEmbedder embedder(embedConfig);
+        Embedder embedder(embedConfig);
         QTimer::singleShot(0, [&embedder]() {
             embedder.processAllFiles();
             qDebug() << "Finished embeddings";
@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
     };
     
     // Configure research LLM
-    RemoteLLMConfig llmConfig;
+    LLMConfig llmConfig;
     llmConfig.enabled = true;
     llmConfig.baseUrl = url;
     llmConfig.model = model;

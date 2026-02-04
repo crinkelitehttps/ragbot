@@ -10,7 +10,7 @@ SOURCES += \
     src/main.cpp \
     src/RAGBot.cpp \
     src/Embedder.cpp \
-    src/llm/RemoteLLMClient.cpp \
+    src/llm/LLMClient.cpp \
     src/db/EmbeddingDatabase.cpp \
     src/db/ConversationDatabase.cpp
 
@@ -18,8 +18,8 @@ SOURCES += \
 HEADERS += \
     src/RAGBot.h \
     src/Embedder.h \
-    src/llm/RemoteLLMClient.h \
-    src/llm/RemoteLLMConfig.h \
+    src/llm/LLMClient.h \
+    src/llm/LLMConfig.h \
     src/db/EmbeddingDatabase.h \
     src/db/ConversationDatabase.h \
     src/config/RoleplayConfig.h 

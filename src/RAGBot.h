@@ -5,8 +5,8 @@
 #include <QVector>
 #include "db/EmbeddingDatabase.h"
 #include "db/ConversationDatabase.h"
-#include "llm/RemoteLLMClient.h"
-#include "llm/RemoteLLMConfig.h"
+#include "llm/LLMClient.h"
+#include "llm/LLMConfig.h"
 #include "config/RoleplayConfig.h"
 #include "llama.h"
 
@@ -15,7 +15,7 @@ class RAGBot
 public:
     RAGBot(const QString &embedModelPath, EmbeddingDatabase *db, 
            ConversationDatabase *convDb,
-           const RemoteLLMConfig &llmConfig, const RoleplayConfig &rpConfig);
+           const LLMConfig &llmConfig, const RoleplayConfig &rpConfig);
     ~RAGBot();
     
     bool initialize();
@@ -30,10 +30,10 @@ private:
     QString m_embedModelPath;
     EmbeddingDatabase *m_db;
     ConversationDatabase *m_convDb;
-    RemoteLLMConfig m_llmConfig;
+    LLMConfig m_llmConfig;
     RoleplayConfig m_rpConfig;
-    RemoteLLMClient *m_remoteLLM;
-    RemoteLLMClient *m_roleplayLLM;
+    LLMClient *m_remoteLLM;
+    LLMClient *m_roleplayLLM;
     llama_context *m_embedCtx;
     llama_model *m_embedModel;
 };
