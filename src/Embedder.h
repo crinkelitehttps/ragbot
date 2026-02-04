@@ -32,37 +32,7 @@ struct RemoteEmbedConfig {
 class RemoteEmbedder
 {
 public:
-    RemoteEmbedder(const RemoteEmbedConfig &config)
-        : m_config(config)
-        , m_manager(new QNetworkAccessManager())
-    {
-        QString jsonDir = QDir::homePath() + "/source/llama-embedder/json";
-        
-        //bool embedFile(const QString &inputPath);
-        if (!QDir(jsonDir).exists()) {
-            qCritical() << "JSON directory not found:" << jsonDir;
-        }
-        
-        // Configure llama-swap embedding server
-        RemoteEmbedConfig embedConfig;
-        embedConfig.enabled = true;
-        embedConfig.baseUrl = "http://127.0.0.1:8080";  // llama-swap default port
-        embedConfig.model = "nomic-embed";  // Model name (llama-swap will route to nomic-embed)
-        embedConfig.timeout = 30000;
-        
-        qDebug() << "Using llama-swap embedding server:" << embedConfig.baseUrl;
-        qDebug() << "Model:" << embedConfig.model;
-        
-        EmbeddingDatabase db("embeddings.db");
-        RemoteEmbedder remoteEmbed(embedConfig);
-    
-        QTimer::singleShot(0, [&]() {
-            processAllFiles();
-        });
-
-        QString m_jsonDir;
-
-    }
+    RemoteEmbedder(const RemoteEmbedConfig &config);
     
     QString extractTextFromJson(const QJsonValue &value, const QStringList &keys);
     void extractTextRecursive(const QJsonValue &value, const QStringList &keys, QStringList &texts);

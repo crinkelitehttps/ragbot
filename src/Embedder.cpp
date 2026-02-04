@@ -2,10 +2,42 @@
 #include "Embedder.h"
 #include "db/EmbeddingDatabase.h"
 
+
+
+RemoteEmbedder::RemoteEmbedder(const RemoteEmbedConfig &config)
+    : m_config(config)
+    , m_manager(new QNetworkAccessManager())
+
+{
+    qDebug() << "RemoteEmbedder::RemoteEmbedder()";
+
+    QString jsonDir = QDir::homePath() + "/source/llama-embedder/json";
+    
+    //bool embedFile(const QString &inputPath);
+    if (!QDir(jsonDir).exists()) {
+        qCritical() << "JSON directory not found:" << jsonDir;
+    }
+    
+    // Configure llama-swap embedding server
+    qDebug() << "Using llama-swap embedding server:" << config.baseUrl;
+    qDebug() << "Model:" << config.model;
+    
+    EmbeddingDatabase db("embeddings.db");
+    RemoteEmbedder remoteEmbed(config);
+
+    QTimer::singleShot(0, [&]() {
+        processAllFiles();
+    });
+
+    QString m_jsonDir;
+
+}
+
 //--------------------------------------------------------------------------------
 QVector<float> RemoteEmbedder::generateEmbedding(const QString &text) 
 {
 
+    qDebug() << "RemoteEmbedder::generateEmbedding()";
     QJsonObject request;
     request["model"] = m_config.model;
     request["input"] = text;
@@ -72,6 +104,7 @@ QVector<float> RemoteEmbedder::generateEmbedding(const QString &text)
 bool EmbeddingDatabase::saveEmbedding(const QString &sourceFile, const QString &itemId, 
                       const QString &content, const QVector<float> &embedding) 
 {
+    qDebug() << "EmbeddingDatabase::saveEmbedding()";
     QSqlQuery query(m_db);
     query.prepare("INSERT OR REPLACE INTO embeddings (source_file, item_id, content, embedding) "
                  "VALUES (?, ?, ?, ?)");
@@ -94,6 +127,7 @@ bool EmbeddingDatabase::saveEmbedding(const QString &sourceFile, const QString &
 //--------------------------------------------------------------------------------
 int EmbeddingDatabase::count()
 {
+    qDebug() << "EmbeddingDatabase::count()";
     QSqlQuery query("SELECT COUNT(*) FROM embeddings", m_db);
     if (query.next()) {
         return query.value(0).toInt();
@@ -104,6 +138,7 @@ int EmbeddingDatabase::count()
 //--------------------------------------------------------------------------------
 void RemoteEmbedder::processAllFiles()
 {
+    qDebug() << "EmbeddingDatabase::processAllFiles()";
     {
         int total = 0, processed = 0;
         
@@ -138,6 +173,7 @@ void RemoteEmbedder::processAllFiles()
 //--------------------------------------------------------------------------------
 bool RemoteEmbedder::embedFile(const QString &inputPath) 
 {
+    qDebug() << "RemoteEmbedder::embedFile()";
     QFile file(inputPath);
     if (!file.open(QIODevice::ReadOnly)) return false;
     
@@ -182,6 +218,7 @@ bool RemoteEmbedder::embedFile(const QString &inputPath)
 //--------------------------------------------------------------------------------
 QString RemoteEmbedder::extractTextFromJson(const QJsonValue &value, const QStringList &keys) 
 {
+    qDebug() << "RemoteEmbedder::extractTextFromJson()";
     QStringList texts;
     extractTextRecursive(value, keys, texts);
     return texts.join(" ");
@@ -190,6 +227,7 @@ QString RemoteEmbedder::extractTextFromJson(const QJsonValue &value, const QStri
 //--------------------------------------------------------------------------------
 void RemoteEmbedder::extractTextRecursive(const QJsonValue &value, const QStringList &keys, QStringList &texts)
 {
+    qDebug() << "RemoteEmbedder::extractTextRecursive()";
     if (value.isObject()) {
         QJsonObject obj = value.toObject();
         for (auto it = obj.begin(); it != obj.end(); ++it) {
@@ -229,11 +267,12 @@ void RemoteEmbedder::extractTextRecursive(const QJsonValue &value, const QString
 //--------------------------------------------------------------------------------
 bool RemoteEmbedder::embedAndSave(const QString &text, const QString &sourcePath, const QString &itemId) 
 {
-   // Use remote embedder
-   QVector<float> embedding = generateEmbedding(text);
-   if (embedding.isEmpty()) {
-       return false;
-   }
-   return m_db->saveEmbedding(sourcePath, itemId, text, embedding);
+    qDebug() << "RemoteEmbedder::embedAndSave()";
+    // Use remote embedder
+    QVector<float> embedding = generateEmbedding(text);
+    if (embedding.isEmpty()) {
+        return false;
+    }
+    return m_db->saveEmbedding(sourcePath, itemId, text, embedding);
 };
 
