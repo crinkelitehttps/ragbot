@@ -27,6 +27,7 @@ struct EmbedConfig {
     QString baseUrl = "http://127.0.0.1:8080";  // llama-swap default port
     QString model = "nomic-embed";  // Model name for llama-swap
     int timeout = 30000;  // 30 seconds
+    QString dbPath = "embeddings.db";
 };
 
 class Embedder

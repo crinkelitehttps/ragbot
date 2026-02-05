@@ -15,7 +15,6 @@ int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     
-    QString embedModelPath = QDir::homePath() + "/.ollama/models/blobs/nomic-embed-text-v1.5.f32.gguf";
     QString dbPath = "embeddings.db";
     QString convDbPath = "conversations.db";
 
@@ -41,16 +40,6 @@ int main(int argc, char *argv[])
     const QString host = isLocal ? "127.0.0.1" : "192.168.0.97";
     const QString url = QString("http://%1:%2/upstream/%3/").arg(host).arg(port).arg(model);
     
-    if (!QFile::exists(embedModelPath)) {
-        qCritical() << "Embedding model not found:" << embedModelPath;
-        return 1;
-    }
-    
-    if (!QFile::exists(dbPath)) {
-        qCritical() << "Database not found:" << dbPath;
-        return 1;
-    }
-     
     if(isEmbedMode) {
         EmbedConfig embedConfig;
         embedConfig.enabled = true;
@@ -85,7 +74,7 @@ int main(int argc, char *argv[])
     
     EmbeddingDatabase db(dbPath);
     ConversationDatabase convDb(convDbPath);
-    RAGBot bot(embedModelPath, &db, &convDb, llmConfig, rpConfig);
+    RAGBot bot("placeholder", &db, &convDb, llmConfig, rpConfig);
     
     QTimer::singleShot(0, [&bot]() {
         bot.startChatLoop();

@@ -9,6 +9,12 @@ Embedder::Embedder(const EmbedConfig &config)
     , m_manager(new QNetworkAccessManager())
 {
     qDebug() << "Embedder::Embedder()" << config.baseUrl;
+    
+    if (!QFile::exists(config.dbPath)) {
+        qCritical() << "Database not found:" << config.dbPath;
+        qDebug() << "Create database here";
+    }
+     
 
     //QString jsonDir = QDir::homePath() + "/source/llama-embedder/json";
     QString jsonDir = QDir::homePath() + "/source/Cataclysm-DDA/data/json";
