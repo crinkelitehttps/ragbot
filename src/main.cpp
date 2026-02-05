@@ -4,12 +4,12 @@
 #include <QTimer>
 #include <QDebug>
 
-#include "RAGBot.h"
-#include "Embedder.h"
+#include "config/LLMConfig.h"
+#include "config/RoleplayConfig.h"
 #include "db/EmbeddingDatabase.h"
 #include "db/ConversationDatabase.h"
-#include "llm/LLMConfig.h"
-#include "config/RoleplayConfig.h"
+#include "Embedder.h"
+#include "RAGBot.h"
 
 int main(int argc, char *argv[])
 {
@@ -60,10 +60,6 @@ int main(int argc, char *argv[])
         qInfo() << "Creating Embedder in main";
 #if 1
         Embedder embedder(embedConfig);
-        QTimer::singleShot(0, [&embedder]() {
-            embedder.processAllFiles();
-            qDebug() << "Finished embeddings";
-        });
 #endif
     };
     

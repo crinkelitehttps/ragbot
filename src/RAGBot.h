@@ -5,9 +5,9 @@
 #include <QVector>
 #include "db/EmbeddingDatabase.h"
 #include "db/ConversationDatabase.h"
-#include "llm/LLMClient.h"
-#include "llm/LLMConfig.h"
+#include "config/LLMConfig.h"
 #include "config/RoleplayConfig.h"
+#include "llm/LLMClient.h"
 #include "llama.h"
 
 class RAGBot

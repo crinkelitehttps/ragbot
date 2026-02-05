@@ -3,7 +3,7 @@
 
 #include <QString>
 #include <QNetworkAccessManager>
-#include "LLMConfig.h"
+#include "../config/LLMConfig.h"
 
 class LLMClient
 {

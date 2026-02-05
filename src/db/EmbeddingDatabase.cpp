@@ -9,8 +9,29 @@
 //--------------------------------------------------------------------------------
 EmbeddingDatabase::EmbeddingDatabase(const QString &dbName)
 {
+    qDebug() << "EmbeddingDatabase::EmbeddingDatabase() dbName " << dbName;
     m_db = QSqlDatabase::addDatabase("QSQLITE", "embeddings");
     m_db.setDatabaseName(dbName);
+
+    QSqlQuery query(m_db);
+
+    QString createTable = R"(
+        CREATE TABLE IF NOT EXISTS embeddings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_file TEXT NOT NULL,
+            item_id TEXT,
+            content TEXT NOT NULL,
+            embedding BLOB NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(source_file, item_id)
+        )
+    )";
+    
+    if (!query.exec(createTable)) {
+        qCritical() << "Failed to create table:" << query.lastError().text();
+    }
+        
+    query.exec("CREATE INDEX IF NOT EXISTS idx_source ON embeddings(source_file)");
     
     if (!m_db.open()) {
         qCritical() << "Failed to open embeddings database:" << m_db.lastError().text();

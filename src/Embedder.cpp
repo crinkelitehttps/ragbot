@@ -11,13 +11,15 @@ Embedder::Embedder(const EmbedConfig &config)
     qDebug() << "Embedder::Embedder()" << config.baseUrl;
 
     //QString jsonDir = QDir::homePath() + "/source/llama-embedder/json";
-    QString jsonDir = QDir::homePath() + "/source/CataclysmDDA/data/json";
+    QString jsonDir = QDir::homePath() + "/source/Cataclysm-DDA/data/json";
     
     if (!QDir(jsonDir).exists()) {
         qCritical() << "JSON directory not found:" << jsonDir;
     }
     
-    EmbeddingDatabase db("new.db");
+    EmbeddingDatabase db("embedder.db");
+
+    processAllFiles();
 }
 
 
@@ -27,32 +29,26 @@ QVector<float> Embedder::generateEmbedding(const QString &text)
 
     qDebug() << "Embedder::generateEmbedding()" << text;
     QJsonObject request;
-    request["model"] = "[MODEL_NAME]";
+    request["model"] = m_config.model;
     request["input"] = text;
-    qWarning() << "Embedder::generateEmbedding() [ set values ]";
     
     QJsonDocument doc(request);
     if (doc.isEmpty()) {
         qWarning() << "Embedder::generateEmbedding() doc.isEmpty()";
     }
-    qInfo() << "Embedder::generateEmbedding() [ passed doc check ]";
 
     QByteArray jsonData = doc.toJson();
     if (jsonData.isEmpty()) {
         qWarning() << "Embedder::generateEmbedding() jsonData.isEmpty()";
     }
-    qInfo() << "Embedder::generateEmbedding() [ passed jsonData check ]";
     
     QNetworkRequest netRequest;
     qInfo() << "Embedder::generateEmbedding() [ passed network created ]";
-    netRequest.setUrl(QUrl(m_config.baseUrl + "/v1/embeddings"));
+    netRequest.setUrl(QUrl(m_config.baseUrl + "v1/embeddings"));
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     netRequest.setTransferTimeout(m_config.timeout);
-    
-    qInfo() << "Embedder::generateEmbedding() [ set network values ]";
 
     QNetworkReply *reply = m_manager->post(netRequest, jsonData);
-    qInfo() << "Embedder::generateEmbedding() [ post ]";
     
     QEventLoop loop;
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
@@ -195,7 +191,6 @@ QString Embedder::extractTextFromJson(const QJsonValue &value, const QStringList
 //--------------------------------------------------------------------------------
 void Embedder::extractTextRecursive(const QJsonValue &value, const QStringList &keys, QStringList &texts)
 {
-    qDebug() << "Embedder::extractTextRecursive()";
     if (value.isObject()) {
         QJsonObject obj = value.toObject();
         for (auto it = obj.begin(); it != obj.end(); ++it) {
