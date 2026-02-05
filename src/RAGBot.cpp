@@ -18,7 +18,7 @@ RAGBot::RAGBot(
         EmbeddingDatabase *db, 
         ConversationDatabase *convDb,
         const LLMConfig &llmConfig,
-        const RoleplayConfig &rpConfig
+        const LLMConfigRoleplay &rpConfig
     )
     : m_embedModelPath(embedModelPath)
     , m_db(db)
@@ -32,17 +32,17 @@ RAGBot::RAGBot(
 {
     if (m_llmConfig.enabled) {
         m_remoteLLM = new LLMClient(m_llmConfig);
-        qDebug() << "Research LLM enabled:" << m_llmConfig.baseUrl;
+        qDebug() << "RAGBot::RAGBot(): Research LLM enabled:" << m_llmConfig.baseUrl;
     } else {
-        qDebug() << "Research LLM disabled - would use local models";
+        qDebug() << "RAGBot::RAGBot(): Research LLM disabled - would use local models";
     }
     
     if (m_rpConfig.enabled) {
         m_roleplayLLM = new LLMClient(m_rpConfig.baseUrl, m_rpConfig.model, 60000);
-        qDebug() << "Roleplay LLM enabled:" << m_rpConfig.baseUrl;
-        qDebug() << "Character:" << m_rpConfig.characterName;
+        qDebug() << "RAGBot::RAGBot(): Roleplay LLM enabled:" << m_rpConfig.baseUrl;
+        qDebug() << "RAGBot::RAGBot(): Character:" << m_rpConfig.characterName;
     } else {
-        qDebug() << "Roleplay mode disabled";
+        qDebug() << "RAGBot::RAGBot(): Roleplay mode disabled";
     }
 }
 
@@ -55,7 +55,7 @@ RAGBot::~RAGBot()
 
 bool RAGBot::initialize()
 {
-    qDebug() << "Initializing embedding model...";
+    qDebug() << "RAGBot::initialize(): embedding model...";
     
     llama_log_set([](ggml_log_level level, const char * text, void * user_data) {
         Q_UNUSED(user_data)
@@ -70,7 +70,7 @@ bool RAGBot::initialize()
     m_embedModel = llama_model_load_from_file(m_embedModelPath.toUtf8().constData(), model_params);
     
     if (!m_embedModel) {
-        qCritical() << "Failed to load embedding model";
+        qCritical() << "RAGBot::initialize(): Failed to load embedding model";
         return false;
     }
     
@@ -84,11 +84,11 @@ bool RAGBot::initialize()
     m_embedCtx = llama_init_from_model(m_embedModel, ctx_params);
     
     if (!m_embedCtx) {
-        qCritical() << "Failed to create embedding context";
+        qCritical() << "RAGBot::initialize(): Failed to create embedding context";
         return false;
     }
     
-    qDebug() << "Embedding model ready";
+    qDebug() << "RAGBot::RAGBot initialize(): model ready";
     return true;
 }
 
@@ -176,34 +176,34 @@ QVector<float> RAGBot::generateEmbedding(const QString &text)
 
 void RAGBot::processQuestion(const QString &question)
 {
-    qDebug() << "\n[Searching database...]";
+    qDebug() << "RAGBot::processQuestion(): " << question;
     
     QVector<float> queryEmb = generateEmbedding(question);
     if (queryEmb.isEmpty()) {
-        qWarning() << "Failed to generate query embedding";
+        qWarning() << "RAGBot::processQuestion(): Failed to generate query embedding";
         return;
     }
     
     auto results = m_db->search(queryEmb, 10);
     
     if (results.isEmpty()) {
-        qDebug() << "No relevant documents found";
+        qDebug() << "RAGBot::processQuestio(): No relevant documents found";
         return;
     }
     
-    qDebug() << QString("Found %1 relevant documents").arg(results.size());
+    qDebug() << QString("RAGBot::processQuestion(): Found %1 relevant documents").arg(results.size());
     
     // Build context from top results
     QString context;
     for (int i = 0; i < results.size(); i++) {
-        context += QString("Document %1 (similarity: %2):\n%3\n\n")
+        context += QString("RAGBot::processQuestion(): Document %1 (similarity: %2):\n%3\n\n")
             .arg(i + 1)
             .arg(results[i].similarity, 0, 'f', 3)
             .arg(results[i].content);
     }
     
     // Stage 1: Research with remote LLM
-    qDebug() << "\n[Stage 1: Research Query]";
+    qDebug() << "RAGBot::processQuestion(): Research Query";
     
     QString researchPrompt = QString(
         "You are a helpful assistant analyzing Cataclysm: Dark Days Ahead game data. "
@@ -237,8 +237,7 @@ void RAGBot::processQuestion(const QString &question)
     
     // Stage 2: Roleplay response
     if (m_rpConfig.enabled && m_roleplayLLM) {
-        qInfo() << "m_rpConfig.enabled";
-        qDebug() << "\n[Stage 2: Roleplay Response]";
+        qDebug() << "RAGBot::processQuestion(): Roleplay Response";
 
         QFile roleplayPromptFile("roleplayPrompt.txt");
         QString rp;
@@ -247,7 +246,7 @@ void RAGBot::processQuestion(const QString &question)
             rp = QString::fromUtf8(roleplayPromptFile.readAll());
             roleplayPromptFile.close();
         } else {
-            qWarning() << "Failed to open roleplayPrompt.txt";
+            qWarning() << "RAGBot::processQuestion(): Failed to open roleplayPrompt.txt";
         }
         
         QString roleplayPrompt = rp.arg("Survivor", researchAnswer, question);
@@ -259,16 +258,17 @@ void RAGBot::processQuestion(const QString &question)
             roleplayPrompt,
             true
         );
+
         QTextStream(stdout) << "\n" << Qt::flush;
         
         if (roleplayAnswer.isEmpty()) {
-            qWarning() << "No response from roleplay LLM";
+            qWarning() << "RAGBot::processQuestio(): No response from roleplay LLM";
         }
     }
     
     // Log conversation to database
     if (!m_convDb->logConversation(queryEmb, question, researchAnswer, roleplayAnswer)) {
-        qWarning() << "Failed to log conversation to database";
+        qWarning() << "RAGBot::processQuestion(): Failed to log conversation to database";
     }
 }
 

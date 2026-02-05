@@ -5,7 +5,7 @@
 #include <QDebug>
 
 #include "config/LLMConfig.h"
-#include "config/RoleplayConfig.h"
+#include "config/LLMConfigRoleplay.h"
 #include "db/EmbeddingDatabase.h"
 #include "db/ConversationDatabase.h"
 #include "Embedder.h"
@@ -47,37 +47,35 @@ int main(int argc, char *argv[])
         embedConfig.model = model;
         embedConfig.timeout = 4 * 60000;
         qInfo() << "Creating Embedder in main";
-#if 1
         Embedder embedder(embedConfig);
-#endif
     };
     
     // Configure research LLM
-    LLMConfig llmConfig;
-    llmConfig.enabled = true;
-    llmConfig.baseUrl = url;
-    llmConfig.model = model;
-    llmConfig.timeout = 4 * 60000;
+    LLMConfig researchConfig;
+    researchConfig.enabled = true;
+    researchConfig.baseUrl = url;
+    researchConfig.model = model;
+    researchConfig.timeout = 4 * 60000;
     
     // Configure roleplay
-    RoleplayConfig rpConfig;
-    rpConfig.enabled = true;
-    rpConfig.characterName = "Survivor";
+    LLMConfigRoleplay roleplayConfig;
+    roleplayConfig.enabled = true;
+    roleplayConfig.characterName = "Survivor";
     
-    if (!rpConfig.loadFromFile("characterBackground.txt")) {
+    if (!roleplayConfig.loadFromFile("characterBackground.txt")) {
         qWarning() << "Failed to load character background from file, using default";
-        rpConfig.characterBackground = "";
+        roleplayConfig.characterBackground = "";
     }
 
-    rpConfig.baseUrl = url;
-    rpConfig.model = model;
+    roleplayConfig.baseUrl = url;
+    roleplayConfig.model = model;
     
     EmbeddingDatabase db(dbPath);
     ConversationDatabase convDb(convDbPath);
-    RAGBot bot("placeholder", &db, &convDb, llmConfig, rpConfig);
+    RAGBot ragbot("placeholder", &db, &convDb, researchConfig, roleplayConfig);
     
-    QTimer::singleShot(0, [&bot]() {
-        bot.startChatLoop();
+    QTimer::singleShot(0, [&ragbot]() {
+        ragbot.startChatLoop();
     });
     
     return app.exec();

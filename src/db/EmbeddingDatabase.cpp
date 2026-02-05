@@ -10,6 +10,7 @@
 EmbeddingDatabase::EmbeddingDatabase(const QString &dbName)
 {
     qDebug() << "EmbeddingDatabase::EmbeddingDatabase() dbName " << dbName;
+
     m_db = QSqlDatabase::addDatabase("QSQLITE", "embeddings");
     m_db.setDatabaseName(dbName);
 

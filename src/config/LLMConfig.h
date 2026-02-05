@@ -1,8 +1,9 @@
-#ifndef REMOTELLMCONFIG_H
-#define REMOTELLMCONFIG_H
+#ifndef LLMCONFIG_H
+#define LLMCONFIG_H
 
 #include <QString>
 
+// TODO fix these defaults
 // Configuration for remote LLM
 struct LLMConfig {
     bool enabled = false;
@@ -11,4 +12,4 @@ struct LLMConfig {
     int timeout = 60000;
 };
 
-#endif // REMOTELLMCONFIG_H
+#endif // LLMCONFIG_H

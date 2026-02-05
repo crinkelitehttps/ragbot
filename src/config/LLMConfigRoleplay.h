@@ -1,23 +1,22 @@
-#ifndef ROLEPLAYCONFIG_H
-#define ROLEPLAYCONFIG_H
+#ifndef ROLEPLAYLLMCONFIG_H
+#define ROLEPLAYLLMCONFIG_H
 
 #include <QString>
 #include <QFile>
 #include <QIODevice>
 #include <QDebug>
+#include "LLMConfig.h"
 
 // Configuration for roleplay
-struct RoleplayConfig {
-    bool enabled = true;
+struct LLMConfigRoleplay: LLMConfig {
+
     QString characterName = "Survivor";
     QString characterBackground = "";
-    QString baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8b-instruct";
-    QString model = "llama-3.2-8b-instruct";
     
     bool loadFromFile(const QString &filePath) {
         QFile file(filePath);
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            qWarning() << "Failed to open character background file:" << filePath;
+            qWarning() << "LLMConfigRolePlay Failed to open character background file:" << filePath;
             return false;
         }
         characterBackground = QString::fromUtf8(file.readAll());
@@ -26,4 +25,4 @@ struct RoleplayConfig {
     }
 };
 
-#endif // ROLEPLAYCONFIG_H
+#endif // ROLEPLAYLLMCONFIG_H

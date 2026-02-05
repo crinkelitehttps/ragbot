@@ -6,16 +6,21 @@
 #include "db/EmbeddingDatabase.h"
 #include "db/ConversationDatabase.h"
 #include "config/LLMConfig.h"
-#include "config/RoleplayConfig.h"
+#include "config/LLMConfigRoleplay.h"
 #include "llm/LLMClient.h"
 #include "llama.h"
 
 class RAGBot
 {
 public:
-    RAGBot(const QString &embedModelPath, EmbeddingDatabase *db, 
-           ConversationDatabase *convDb,
-           const LLMConfig &llmConfig, const RoleplayConfig &rpConfig);
+    RAGBot(
+        const QString &embedModelPath,
+        EmbeddingDatabase *db, 
+        ConversationDatabase *convDb,
+        const LLMConfig &llmConfig,
+        const LLMConfigRoleplay &rpConfig
+    );
+
     ~RAGBot();
     
     bool initialize();
@@ -31,7 +36,7 @@ private:
     EmbeddingDatabase *m_db;
     ConversationDatabase *m_convDb;
     LLMConfig m_llmConfig;
-    RoleplayConfig m_rpConfig;
+    LLMConfigRoleplay m_rpConfig;
     LLMClient *m_remoteLLM;
     LLMClient *m_roleplayLLM;
     llama_context *m_embedCtx;
