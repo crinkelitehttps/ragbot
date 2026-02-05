@@ -14,27 +14,26 @@
 #include <QTimer>
 #include <QSqlDatabase>
 #include <QSqlQuery>
-#include <QSqlError>
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
 #include <QNetworkReply>
 #include <QEventLoop>
 #include "db/EmbeddingDatabase.h"
+#include "config/LLMConfigEmbedder.h"
 
 // Configuration for llama-swap embedding server
-struct EmbedConfig {
-    bool enabled = false;
-    QString baseUrl = "http://127.0.0.1:8080";  // llama-swap default port
-    QString model = "nomic-embed";  // Model name for llama-swap
-    int timeout = 30000;  // 30 seconds
-    QString dbPath = "embeddings.db";
-};
+//struct EmbedConfig {
+//    bool enabled = false;
+//    QString baseUrl = "http://127.0.0.1:8080";  // llama-swap default port
+//    QString model = "nomic-embed-v1.5";  // Model name for llama-swap
+//    int timeout = 30000;  // 30 seconds
+//    QString dbPath = "embeddings.db";
+//};
 
 class Embedder
 {
 public:
-
-    Embedder(const EmbedConfig &config);
+    Embedder(const LLMConfigEmbedder &config);
     
     ~Embedder()
     {
@@ -53,7 +52,7 @@ private:
 private:
     QString m_jsonDir;
     EmbeddingDatabase *m_db;
-    EmbedConfig m_config;
+    LLMConfigEmbedder m_config;
     QNetworkAccessManager *m_manager;
 };
 

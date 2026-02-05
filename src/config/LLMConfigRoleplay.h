@@ -8,7 +8,7 @@
 #include "LLMConfig.h"
 
 // Configuration for roleplay
-struct LLMConfigRoleplay: LLMConfig {
+struct LLMConfigRoleplay : LLMConfig {
 
     QString characterName = "Survivor";
     QString characterBackground = "";

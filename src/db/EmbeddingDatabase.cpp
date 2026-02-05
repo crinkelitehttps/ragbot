@@ -1,10 +1,11 @@
-#include "EmbeddingDatabase.h"
-#include <QSqlQuery>
-#include <QSqlError>
-#include <QDebug>
+
 #include <algorithm>
 #include <cmath>
+#include <QDebug>
+#include <QSqlQuery>
+#include <QSqlError>
 
+#include "EmbeddingDatabase.h"
 
 //--------------------------------------------------------------------------------
 EmbeddingDatabase::EmbeddingDatabase(const QString &dbName)
@@ -29,25 +30,40 @@ EmbeddingDatabase::EmbeddingDatabase(const QString &dbName)
     )";
     
     if (!query.exec(createTable)) {
-        qCritical() << "Failed to create table:" << query.lastError().text();
+        qCritical()
+            << "EmbeddingDatase::EmbeddingDatabase(): Failed to create table:"
+            << query.lastError().text();
     }
         
-    query.exec("CREATE INDEX IF NOT EXISTS idx_source ON embeddings(source_file)");
+    query.exec(
+        "CREATE INDEX IF NOT EXISTS idx_source ON embeddings(source_file)"
+    );
     
     if (!m_db.open()) {
-        qCritical() << "Failed to open embeddings database:" << m_db.lastError().text();
+        qCritical() << "Failed to open embeddings database:"
+           << m_db.lastError().text();
     }
 }
 
 
 //--------------------------------------------------------------------------------
-QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(const QVector<float> &queryEmbedding, int topK)
+QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
+        const QVector<float> &queryEmbedding,
+        int topK
+    )
 {
+    qDebug() << "EmbeddingDatabase::search():" << queryEmbedding.count() << topK;
+
     QSqlQuery query(m_db);
-    query.prepare("SELECT content, source_file, item_id, embedding FROM embeddings");
+
+    query.prepare(
+        "SELECT content, source_file, item_id, embedding FROM embeddings"
+    );
     
     if (!query.exec()) {
-        qCritical() << "Query failed:" << query.lastError().text();
+        qCritical() << "EmbeddingDatabase::search(): Query failed:"
+           << query.lastError().text();
+
         return {};
     }
     
@@ -59,7 +75,10 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(const QVector
         QString itemId = query.value(2).toString();
         QByteArray embBlob = query.value(3).toByteArray();
         
-        const float *embData = reinterpret_cast<const float*>(embBlob.constData());
+        const float *embData = reinterpret_cast<const float*>(
+                embBlob.constData()
+        );
+
         int embSize = embBlob.size() / sizeof(float);
         
         if (embSize != queryEmbedding.size()) continue;
@@ -100,19 +119,31 @@ int EmbeddingDatabase::count()
 
 
 //--------------------------------------------------------------------------------
-bool EmbeddingDatabase::saveEmbedding(const QString &sourceFile, const QString &itemId, 
-                      const QString &content, const QVector<float> &embedding) 
+bool EmbeddingDatabase::saveEmbedding(
+        const QString &sourceFile,
+        const QString &itemId,
+        const QString &content,
+        const QVector<float> &embedding
+    ) 
 {
     qDebug() << "EmbeddingDatabase::saveEmbedding()";
     QSqlQuery query(m_db);
-    query.prepare("INSERT OR REPLACE INTO embeddings (source_file, item_id, content, embedding) "
-                 "VALUES (?, ?, ?, ?)");
+
+    query.prepare(
+        "INSERT OR REPLACE INTO embeddings " 
+        "(source_file, item_id, content, embedding) "
+        "VALUES (?, ?, ?, ?)"
+    );
+
     query.addBindValue(sourceFile);
     query.addBindValue(itemId);
     query.addBindValue(content.left(5000)); // Truncate very long content
     
-    QByteArray embBlob(reinterpret_cast<const char*>(embedding.data()), 
-                      embedding.size() * sizeof(float));
+    QByteArray embBlob(
+            reinterpret_cast<const char*>(embedding.data()), 
+            embedding.size() * sizeof(float)
+    );
+
     query.addBindValue(embBlob);
     
     if (!query.exec()) {
@@ -124,7 +155,11 @@ bool EmbeddingDatabase::saveEmbedding(const QString &sourceFile, const QString &
 
 
 //--------------------------------------------------------------------------------
-float EmbeddingDatabase::cosineSimilarity(const QVector<float> &a, const float *b, int size)
+float EmbeddingDatabase::cosineSimilarity(
+        const QVector<float> &a,
+        const float *b,
+        int size
+    )
 {
     float dotProduct = 0.0f;
     float normA = 0.0f;

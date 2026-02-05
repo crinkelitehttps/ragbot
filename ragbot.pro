@@ -19,7 +19,7 @@ HEADERS += \
     src/RAGBot.h \
     src/Embedder.h \
     src/config/LLMConfig.h \
-    src/config/RoleplayLLMConfig.h \
+    src/config/LLMConfigRoleplay.h \
     src/db/EmbeddingDatabase.h \
     src/db/ConversationDatabase.h \
     src/llm/LLMClient.h 

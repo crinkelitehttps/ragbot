@@ -9,6 +9,7 @@
 #include "db/EmbeddingDatabase.h"
 #include "db/ConversationDatabase.h"
 #include "Embedder.h"
+#include "config/LLMConfig.h"
 #include "RAGBot.h"
 
 int main(int argc, char *argv[])
@@ -41,7 +42,7 @@ int main(int argc, char *argv[])
     const QString url = QString("http://%1:%2/upstream/%3/").arg(host).arg(port).arg(model);
     
     if(isEmbedMode) {
-        EmbedConfig embedConfig;
+        LLMConfigEmbedder embedConfig;
         embedConfig.enabled = true;
         embedConfig.baseUrl = url;
         embedConfig.model = model;

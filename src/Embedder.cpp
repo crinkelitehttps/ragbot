@@ -1,18 +1,20 @@
 // Modified to use local llama-swap embedding server
 #include "Embedder.h"
 #include "db/EmbeddingDatabase.h"
+#include "config/LLMConfigEmbedder.h"
 
 
 //--------------------------------------------------------------------------------
-Embedder::Embedder(const EmbedConfig &config)
+Embedder::Embedder(const LLMConfigEmbedder &config)
     : m_config(config)
     , m_manager(new QNetworkAccessManager())
 {
     qDebug() << "Embedder::Embedder()" << config.baseUrl;
     
     if (!QFile::exists(config.dbPath)) {
-        qCritical() << "Embedder::Embedder(): Database not found:" << config.dbPath;
-        qDebug() << "Embedder::Embedder(): Create database here";
+        qCritical() << "Embedder::Embedder(): Database not found:"
+            << config.dbPath;
+        // Embedder::Embedder(): Create database here;
     }
      
 
@@ -38,7 +40,14 @@ void Embedder::processAllFiles()
 
         m_jsonDir = "/home/joe/source/Cataclysm-DDA/data/json";
         
-        QDirIterator countIt(m_jsonDir, QStringList() << "*.json", QDir::Files, QDirIterator::Subdirectories);
+        QDirIterator countIt(
+                m_jsonDir,
+                QStringList()
+                << "*.json",
+                QDir::Files,
+                QDirIterator::Subdirectories
+        );
+
         while (countIt.hasNext()) {
             countIt.next();
             total++;
@@ -46,28 +55,44 @@ void Embedder::processAllFiles()
         
         qDebug() << "Embedder::processAllFiles(): Found" << total << "JSON files";
         
-        QDirIterator it(m_jsonDir, QStringList() << "*.json", QDir::Files, QDirIterator::Subdirectories);
+        QDirIterator it(
+                m_jsonDir,
+                QStringList()
+                << "*.json",
+                QDir::Files,
+                QDirIterator::Subdirectories
+        );
         
         while (it.hasNext()) {
             QString filePath = it.next();
             QFileInfo fileInfo(filePath);
             
             processed++;
-            qDebug() << QString("[%1/%2] %3").arg(processed).arg(total).arg(fileInfo.fileName());
+
+            qDebug() << QString("[%1/%2] %3").arg(processed)
+                .arg(total)
+                .arg(fileInfo.fileName());
             
             if (!embedFile(filePath)) {
                 qWarning() << "Embedder::processAllFiles(): Failed:" << filePath;
             }
         }
         
-        qDebug() << "Embedder::processAllFiles(): Complete! Processed" << processed << "files";
+        qDebug() << "Embedder::processAllFiles(): Complete! Processed" 
+            << processed
+            << "files";
+
         QCoreApplication::quit();
     }
 };
 
 
 //--------------------------------------------------------------------------------
-bool Embedder::embedAndSave(const QString &text, const QString &sourcePath, const QString &itemId) 
+bool Embedder::embedAndSave(
+        const QString &text,
+        const QString &sourcePath,
+        const QString &itemId
+    ) 
 {
     qDebug() << "Embedder::embedAndSave()";
     // Use remote embedder
@@ -77,6 +102,7 @@ bool Embedder::embedAndSave(const QString &text, const QString &sourcePath, cons
     }
     return m_db->saveEmbedding(sourcePath, itemId, text, embedding);
 };
+
 
 //--------------------------------------------------------------------------------
 bool Embedder::embedFile(const QString &inputPath) 
@@ -125,7 +151,10 @@ bool Embedder::embedFile(const QString &inputPath)
 
 
 //--------------------------------------------------------------------------------
-QString Embedder::extractTextFromJson(const QJsonValue &value, const QStringList &keys) 
+QString Embedder::extractTextFromJson(
+        const QJsonValue &value,
+        const QStringList &keys
+    ) 
 {
     qDebug() << "Embedder::extractTextFromJson()";
     QStringList texts;
@@ -135,7 +164,11 @@ QString Embedder::extractTextFromJson(const QJsonValue &value, const QStringList
 
 
 //--------------------------------------------------------------------------------
-void Embedder::extractTextRecursive(const QJsonValue &value, const QStringList &keys, QStringList &texts)
+void Embedder::extractTextRecursive(
+        const QJsonValue &value,
+        const QStringList &keys,
+        QStringList &texts
+    )
 {
     if (value.isObject()) {
         QJsonObject obj = value.toObject();
@@ -238,7 +271,8 @@ QVector<float> Embedder::generateEmbedding(const QString &text)
                 }
             }
         } else {
-            qWarning() << "Embedder::generateEmbedding(): Network error:" << reply->errorString();
+            qWarning() << "Embedder::generateEmbedding(): Network error:" 
+                << reply->errorString();
         }
     } else {
         reply->abort();
