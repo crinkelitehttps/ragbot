@@ -5,9 +5,13 @@
 #include <algorithm>
 #include <cmath>
 
+
+//--------------------------------------------------------------------------------
 EmbeddingDatabase::EmbeddingDatabase(const QString &dbName)
 {
-    m_db = QSqlDatabase::addDatabase("QSQLITE", "embeddings");
+    if (!m_db.isOpen()) {
+        m_db = QSqlDatabase::addDatabase("QSQLITE", "embeddings");
+    }
     m_db.setDatabaseName(dbName);
     
     if (!m_db.open()) {
@@ -15,6 +19,8 @@ EmbeddingDatabase::EmbeddingDatabase(const QString &dbName)
     }
 }
 
+
+//--------------------------------------------------------------------------------
 QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(const QVector<float> &queryEmbedding, int topK)
 {
     QSqlQuery query(m_db);
@@ -60,6 +66,44 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(const QVector
     return results;
 }
 
+
+//--------------------------------------------------------------------------------
+int EmbeddingDatabase::count()
+{
+    qDebug() << "EmbeddingDatabase::count()";
+    QSqlQuery query("SELECT COUNT(*) FROM embeddings", m_db);
+    if (query.next()) {
+        return query.value(0).toInt();
+    }
+    return 0;
+};
+
+
+//--------------------------------------------------------------------------------
+bool EmbeddingDatabase::saveEmbedding(const QString &sourceFile, const QString &itemId, 
+                      const QString &content, const QVector<float> &embedding) 
+{
+    qDebug() << "EmbeddingDatabase::saveEmbedding()";
+    QSqlQuery query(m_db);
+    query.prepare("INSERT OR REPLACE INTO embeddings (source_file, item_id, content, embedding) "
+                 "VALUES (?, ?, ?, ?)");
+    query.addBindValue(sourceFile);
+    query.addBindValue(itemId);
+    query.addBindValue(content.left(5000)); // Truncate very long content
+    
+    QByteArray embBlob(reinterpret_cast<const char*>(embedding.data()), 
+                      embedding.size() * sizeof(float));
+    query.addBindValue(embBlob);
+    
+    if (!query.exec()) {
+        qWarning() << "Failed to save embedding:" << query.lastError().text();
+        return false;
+    }
+    return true;
+};
+
+
+//--------------------------------------------------------------------------------
 float EmbeddingDatabase::cosineSimilarity(const QVector<float> &a, const float *b, int size)
 {
     float dotProduct = 0.0f;

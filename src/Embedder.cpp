@@ -9,28 +9,20 @@ Embedder::Embedder(const EmbedConfig &config)
     , m_manager(new QNetworkAccessManager())
 
 {
-    qDebug() << "Embedder::Embedder()";
+    qDebug() << "Embedder::Embedder()" << config.baseUrl << config.model;
 
-    QString jsonDir = QDir::homePath() + "/source/llama-embedder/json";
+    //QString jsonDir = QDir::homePath() + "/source/llama-embedder/json";
+    QString jsonDir = QDir::homePath() + "/source/CataclysmDDA/data/json";
     
-    //bool embedFile(const QString &inputPath);
     if (!QDir(jsonDir).exists()) {
         qCritical() << "JSON directory not found:" << jsonDir;
     }
     
-    // Configure llama-swap embedding server
-    qDebug() << "Using llama-swap embedding server:" << config.baseUrl;
-    qDebug() << "Model:" << config.model;
-    
-    EmbeddingDatabase db("embeddings.db");
-    Embedder remoteEmbed(config);
+    EmbeddingDatabase db("new.db");
 
     QTimer::singleShot(0, [&]() {
         processAllFiles();
     });
-
-    QString m_jsonDir;
-
 }
 
 //--------------------------------------------------------------------------------
@@ -101,46 +93,13 @@ QVector<float> Embedder::generateEmbedding(const QString &text)
 };
 
 //--------------------------------------------------------------------------------
-bool EmbeddingDatabase::saveEmbedding(const QString &sourceFile, const QString &itemId, 
-                      const QString &content, const QVector<float> &embedding) 
-{
-    qDebug() << "EmbeddingDatabase::saveEmbedding()";
-    QSqlQuery query(m_db);
-    query.prepare("INSERT OR REPLACE INTO embeddings (source_file, item_id, content, embedding) "
-                 "VALUES (?, ?, ?, ?)");
-    query.addBindValue(sourceFile);
-    query.addBindValue(itemId);
-    query.addBindValue(content.left(5000)); // Truncate very long content
-    
-    QByteArray embBlob(reinterpret_cast<const char*>(embedding.data()), 
-                      embedding.size() * sizeof(float));
-    query.addBindValue(embBlob);
-    
-    if (!query.exec()) {
-        qWarning() << "Failed to save embedding:" << query.lastError().text();
-        return false;
-    }
-        return true;
-    
-};
-
-//--------------------------------------------------------------------------------
-int EmbeddingDatabase::count()
-{
-    qDebug() << "EmbeddingDatabase::count()";
-    QSqlQuery query("SELECT COUNT(*) FROM embeddings", m_db);
-    if (query.next()) {
-        return query.value(0).toInt();
-    }
-    return 0;
-};
-
-//--------------------------------------------------------------------------------
 void Embedder::processAllFiles()
 {
     qDebug() << "EmbeddingDatabase::processAllFiles()";
     {
         int total = 0, processed = 0;
+
+        m_jsonDir = "/home/joe/source/CataclysmDDA/data/json";
         
         QDirIterator countIt(m_jsonDir, QStringList() << "*.json", QDir::Files, QDirIterator::Subdirectories);
         while (countIt.hasNext()) {
@@ -165,7 +124,6 @@ void Embedder::processAllFiles()
         }
         
         qDebug() << "Complete! Processed" << processed << "files";
-        qDebug() << "Database now contains" << m_db->count() << "embeddings";
         QCoreApplication::quit();
     }
 };

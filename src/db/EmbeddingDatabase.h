@@ -19,13 +19,11 @@ public:
     
     QVector<SearchResult> search(const QVector<float> &queryEmbedding, int topK = 10);
     int count();
-
     bool saveEmbedding(const QString &sourceFile, const QString &itemId, 
                       const QString &content, const QVector<float> &embedding);
 
 private:
     float cosineSimilarity(const QVector<float> &a, const float *b, int size);
-
     QSqlDatabase m_db;
 };
 
