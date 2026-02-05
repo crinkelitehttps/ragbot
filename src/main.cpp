@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
         embedConfig.baseUrl = url;
         embedConfig.model = model;
         embedConfig.timeout = 4 * 60000;
-        qInfo() << "creating Embedder in main";
+        qInfo() << "Creating Embedder in main";
 #if 1
         Embedder embedder(embedConfig);
         QTimer::singleShot(0, [&embedder]() {

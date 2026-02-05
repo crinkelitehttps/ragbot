@@ -32,6 +32,7 @@ struct EmbedConfig {
 class Embedder
 {
 public:
+
     Embedder(const EmbedConfig &config);
     
     QString extractTextFromJson(const QJsonValue &value, const QStringList &keys);

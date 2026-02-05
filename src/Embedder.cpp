@@ -3,13 +3,12 @@
 #include "db/EmbeddingDatabase.h"
 
 
-
+//--------------------------------------------------------------------------------
 Embedder::Embedder(const EmbedConfig &config)
     : m_config(config)
     , m_manager(new QNetworkAccessManager())
-
 {
-    qDebug() << "Embedder::Embedder()" << config.baseUrl << config.model;
+    qDebug() << "Embedder::Embedder()" << config.baseUrl;
 
     //QString jsonDir = QDir::homePath() + "/source/llama-embedder/json";
     QString jsonDir = QDir::homePath() + "/source/CataclysmDDA/data/json";
@@ -19,30 +18,41 @@ Embedder::Embedder(const EmbedConfig &config)
     }
     
     EmbeddingDatabase db("new.db");
-
-    QTimer::singleShot(0, [&]() {
-        processAllFiles();
-    });
 }
+
 
 //--------------------------------------------------------------------------------
 QVector<float> Embedder::generateEmbedding(const QString &text) 
 {
 
-    qDebug() << "Embedder::generateEmbedding()";
+    qDebug() << "Embedder::generateEmbedding()" << text;
     QJsonObject request;
-    request["model"] = m_config.model;
+    request["model"] = "[MODEL_NAME]";
     request["input"] = text;
+    qWarning() << "Embedder::generateEmbedding() [ set values ]";
     
     QJsonDocument doc(request);
+    if (doc.isEmpty()) {
+        qWarning() << "Embedder::generateEmbedding() doc.isEmpty()";
+    }
+    qInfo() << "Embedder::generateEmbedding() [ passed doc check ]";
+
     QByteArray jsonData = doc.toJson();
+    if (jsonData.isEmpty()) {
+        qWarning() << "Embedder::generateEmbedding() jsonData.isEmpty()";
+    }
+    qInfo() << "Embedder::generateEmbedding() [ passed jsonData check ]";
     
     QNetworkRequest netRequest;
+    qInfo() << "Embedder::generateEmbedding() [ passed network created ]";
     netRequest.setUrl(QUrl(m_config.baseUrl + "/v1/embeddings"));
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     netRequest.setTransferTimeout(m_config.timeout);
     
+    qInfo() << "Embedder::generateEmbedding() [ set network values ]";
+
     QNetworkReply *reply = m_manager->post(netRequest, jsonData);
+    qInfo() << "Embedder::generateEmbedding() [ post ]";
     
     QEventLoop loop;
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
@@ -99,7 +109,7 @@ void Embedder::processAllFiles()
     {
         int total = 0, processed = 0;
 
-        m_jsonDir = "/home/joe/source/CataclysmDDA/data/json";
+        m_jsonDir = "/home/joe/source/Cataclysm-DDA/data/json";
         
         QDirIterator countIt(m_jsonDir, QStringList() << "*.json", QDir::Files, QDirIterator::Subdirectories);
         while (countIt.hasNext()) {

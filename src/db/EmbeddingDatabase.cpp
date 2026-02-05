@@ -9,9 +9,7 @@
 //--------------------------------------------------------------------------------
 EmbeddingDatabase::EmbeddingDatabase(const QString &dbName)
 {
-    if (!m_db.isOpen()) {
-        m_db = QSqlDatabase::addDatabase("QSQLITE", "embeddings");
-    }
+    m_db = QSqlDatabase::addDatabase("QSQLITE", "embeddings");
     m_db.setDatabaseName(dbName);
     
     if (!m_db.open()) {
