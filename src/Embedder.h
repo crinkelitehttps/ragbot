@@ -19,25 +19,20 @@
 #include <QNetworkReply>
 #include <QEventLoop>
 #include "db/EmbeddingDatabase.h"
-#include "config/LLMConfigEmbedder.h"
+#include "config/ConfigEmbed.h"
 
-// Configuration for llama-swap embedding server
-//struct EmbedConfig {
-//    bool enabled = false;
-//    QString baseUrl = "http://127.0.0.1:8080";  // llama-swap default port
-//    QString model = "nomic-embed-v1.5";  // Model name for llama-swap
-//    int timeout = 30000;  // 30 seconds
-//    QString dbPath = "embeddings.db";
-//};
+#include "llm/LLMClient.h"
+#include "llm/ClientEmbed.h"
+
 
 class Embedder
 {
 public:
-    Embedder(const LLMConfigEmbedder &config);
+    Embedder(const ConfigEmbed &embedderConfig);
     
     ~Embedder()
     {
-        delete m_manager;
+        delete m_network;
     }
 
     void processAllFiles();
@@ -51,9 +46,13 @@ private:
 
 private:
     QString m_jsonDir;
-    EmbeddingDatabase *m_db;
-    LLMConfigEmbedder m_config;
-    QNetworkAccessManager *m_manager;
+    ConfigEmbed m_config;
+    QNetworkAccessManager *m_network;
+    EmbeddingDatabase m_db;
+
+#ifdef LOCAL_EMBED
+    ClientEmbed m_embedClient;
+#endif
 };
 
 #endif // EMBEDDER_H

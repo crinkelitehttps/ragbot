@@ -19,10 +19,14 @@ HEADERS += \
     src/RAGBot.h \
     src/Embedder.h \
     src/config/LLMConfig.h \
-    src/config/LLMConfigRoleplay.h \
+    src/config/ConfigRoleplay.h \
+    src/config/ConfigEmbed.h \
+    src/config/ConfigRoleplay.h \
     src/db/EmbeddingDatabase.h \
     src/db/ConversationDatabase.h \
-    src/llm/LLMClient.h 
+    src/llm/ClientEmbed.h \
+    src/llm/ClientResearch.h \
+    src/llm/ClientRoleplay.h
 
 # Include paths
 # Force Qt from home directory, NOT system repos

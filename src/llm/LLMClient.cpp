@@ -11,23 +11,11 @@
 #include <QUrl>
 
 LLMClient::LLMClient(const LLMConfig &config)
-    : m_config(config), m_manager(new QNetworkAccessManager())
+    : m_config(config)
+    , m_manager(new QNetworkAccessManager())
 {
 }
 
-LLMClient::LLMClient(const QString &baseUrl, const QString &model, int timeout)
-    : m_manager(new QNetworkAccessManager())
-{
-    m_config.enabled = true;
-    m_config.baseUrl = baseUrl;
-    m_config.model = model;
-    m_config.timeout = timeout;
-}
-
-LLMClient::~LLMClient()
-{
-    delete m_manager;
-}
 
 QString LLMClient::chat(const QString &systemPrompt, const QString &userMessage, bool stream)
 {

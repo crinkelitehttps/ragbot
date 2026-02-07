@@ -6,7 +6,11 @@
 #include "db/EmbeddingDatabase.h"
 #include "db/ConversationDatabase.h"
 #include "config/LLMConfig.h"
-#include "config/LLMConfigRoleplay.h"
+
+#include "config/ConfigRoleplay.h"
+#include "config/ConfigEmbed.h"
+#include "config/ConfigResearch.h"
+
 #include "llm/LLMClient.h"
 #include "llama.h"
 
@@ -14,33 +18,31 @@ class RAGBot
 {
 public:
     RAGBot(
-        const QString &embedModelPath,
-        EmbeddingDatabase *db, 
-        ConversationDatabase *convDb,
-        const LLMConfig &llmConfig,
-        const LLMConfigRoleplay &rpConfig
+        ConfigEmbed &embedderConfig,
+        ConfigResearch &researchConfig,
+        ConfigRoleplay &roleplayConfig
     );
 
-    ~RAGBot();
+    ~RAGBot() { qDebug() << "~RAGBot()"; }
     
     bool initialize();
     void startChatLoop();
 
 private:
+    void cleanup();
     QVector<float> generateEmbedding(const QString &text);
     void processQuestion(const QString &question);
-    void cleanup();
 
 private:
-    QString m_embedModelPath;
-    EmbeddingDatabase *m_db;
-    ConversationDatabase *m_convDb;
-    LLMConfig m_llmConfig;
-    LLMConfigRoleplay m_rpConfig;
-    LLMClient *m_remoteLLM;
-    LLMClient *m_roleplayLLM;
+    ConfigRoleplay m_configRoleplay;
+    ConfigEmbed m_configEmbed;
+    ConfigResearch m_configResearch;
+
+#if 1
     llama_context *m_embedCtx;
     llama_model *m_embedModel;
+#endif
+
 };
 
 #endif // RAGBOT_H

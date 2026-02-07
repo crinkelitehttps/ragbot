@@ -1,22 +1,22 @@
-#ifndef LLMCLIENT_H
-#define LLMCLIENT_H
+#ifndef CLIENTROLEPLAY_H
+#define CLIENTROLEPLAY_H
 
 #include <QString>
 #include <QNetworkAccessManager>
 #include "../config/LLMConfig.h"
+#include "../config/ConfigRoleplay.h"
 #include "../db/EmbeddingDatabase.h"
 
-class LLMClient
+class ClientRoleplay
 {
 public:
-    LLMClient(const LLMConfig &config);
-    ~LLMClient() { qDebug() << "~LLMClient()"; }
+    ClientRoleplay(const ConfigRoleplay &config);
+    ~ClientRoleplay() { qDebug() << "~LLMClient()"; }
 
     QString chat(const QString &systemPrompt, const QString &userMessage, bool stream);
 
 private:
-    LLMConfig m_config;
     QNetworkAccessManager *m_manager;
 };
 
-#endif // LLMCLIENT_H
+#endif // CLIENTROLEPLAY_H

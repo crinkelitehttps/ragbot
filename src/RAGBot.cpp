@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QCoreApplication>
 #include <QFile>
+#include "Embedder.h"
 // llama_silenced.h
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -14,80 +15,51 @@
 
 
 RAGBot::RAGBot(
-        const QString &embedModelPath,
-        EmbeddingDatabase *db, 
-        ConversationDatabase *convDb,
-        const LLMConfig &llmConfig,
-        const LLMConfigRoleplay &rpConfig
+        ConfigEmbed &embedConfig,
+        ConfigResearch &researchConfig,
+        ConfigRoleplay &roleplayConfig
     )
-    : m_embedModelPath(embedModelPath)
-    , m_db(db)
-    , m_convDb(convDb)
-    , m_llmConfig(llmConfig)
-    , m_rpConfig(rpConfig)
-    , m_remoteLLM(nullptr)
-    , m_roleplayLLM(nullptr)
-    , m_embedCtx(nullptr)
-    , m_embedModel(nullptr)
 {
-    if (m_llmConfig.enabled) {
-        m_remoteLLM = new LLMClient(m_llmConfig);
-        qDebug() << "RAGBot::RAGBot(): Research LLM enabled:" << m_llmConfig.baseUrl;
-    } else {
-        qDebug() << "RAGBot::RAGBot(): Research LLM disabled - would use local models";
-    }
-    
-    if (m_rpConfig.enabled) {
-        m_roleplayLLM = new LLMClient(m_rpConfig.baseUrl, m_rpConfig.model, 60000);
-        qDebug() << "RAGBot::RAGBot(): Roleplay LLM enabled:" << m_rpConfig.baseUrl;
-        qDebug() << "RAGBot::RAGBot(): Character:" << m_rpConfig.characterName;
-    } else {
-        qDebug() << "RAGBot::RAGBot(): Roleplay mode disabled";
-    }
+    qDebug() << "RAGBot::RAGBot()";
 }
 
-RAGBot::~RAGBot()
-{
-    cleanup();
-    delete m_remoteLLM;
-    delete m_roleplayLLM;
-}
 
 bool RAGBot::initialize()
 {
     qDebug() << "RAGBot::initialize(): embedding model...";
-    
+
     llama_log_set([](ggml_log_level level, const char * text, void * user_data) {
         Q_UNUSED(user_data)
         if (level == GGML_LOG_LEVEL_ERROR) {
             fprintf(stderr, "%s", text);
         }
     }, nullptr);
-    
+
     llama_backend_init();
-    
+
     llama_model_params model_params = llama_model_default_params();
-    m_embedModel = llama_model_load_from_file(m_embedModelPath.toUtf8().constData(), model_params);
-    
+    m_embedModel = llama_model_load_from_file(QString("PLACEHOLDER").toUtf8().constData(), model_params);
+
     if (!m_embedModel) {
         qCritical() << "RAGBot::initialize(): Failed to load embedding model";
         return false;
     }
-    
+ 
     llama_context_params ctx_params = llama_context_default_params();
+
     ctx_params.n_ctx = 2048;
     ctx_params.n_batch = 2048;
     ctx_params.n_ubatch = 2048;
     ctx_params.embeddings = true;
     ctx_params.pooling_type = LLAMA_POOLING_TYPE_MEAN;
-    
+
     m_embedCtx = llama_init_from_model(m_embedModel, ctx_params);
-    
+
     if (!m_embedCtx) {
         qCritical() << "RAGBot::initialize(): Failed to create embedding context";
         return false;
     }
-    
+
     qDebug() << "RAGBot::RAGBot initialize(): model ready";
     return true;
 }
@@ -99,8 +71,9 @@ void RAGBot::startChatLoop()
         return;
     }
     
+#if 0
     qDebug() << "\n=== RAG Bot Ready ===";
-    if (m_rpConfig.enabled) {
+    if (m_embedder.isValid()) {
         qDebug() << "Mode: Two-stage (Research + Roleplay)";
         qDebug() << "Character:" << m_rpConfig.characterName;
     } else {
@@ -130,6 +103,7 @@ void RAGBot::startChatLoop()
     }
     
     cleanup();
+#endif
     QCoreApplication::quit();
 }
 
@@ -169,13 +143,14 @@ QVector<float> RAGBot::generateEmbedding(const QString &text)
             result[i] = embeddings[i];
         }
     }
-    
     llama_batch_free(batch);
+    
     return result;
 }
 
 void RAGBot::processQuestion(const QString &question)
 {
+#if 0
     qDebug() << "RAGBot::processQuestion(): " << question;
     
     QVector<float> queryEmb = generateEmbedding(question);
@@ -270,10 +245,12 @@ void RAGBot::processQuestion(const QString &question)
     if (!m_convDb->logConversation(queryEmb, question, researchAnswer, roleplayAnswer)) {
         qWarning() << "RAGBot::processQuestion(): Failed to log conversation to database";
     }
+#endif
 }
 
 void RAGBot::cleanup()
 {
+#if 0
     if (m_embedCtx) {
         llama_free(m_embedCtx);
         m_embedCtx = nullptr;
@@ -283,4 +260,5 @@ void RAGBot::cleanup()
         m_embedModel = nullptr;
     }
     llama_backend_free();
+#endif
 }

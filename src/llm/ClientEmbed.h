@@ -1,22 +1,22 @@
-#ifndef LLMCLIENT_H
-#define LLMCLIENT_H
+#ifndef CLIENTEMBED_H
+#define CLIENTEMBED_H
 
 #include <QString>
 #include <QNetworkAccessManager>
 #include "../config/LLMConfig.h"
+#include "../config/ConfigEmbed.h"
 #include "../db/EmbeddingDatabase.h"
 
-class LLMClient
+class ClientEmbed
 {
 public:
-    LLMClient(const LLMConfig &config);
-    ~LLMClient() { qDebug() << "~LLMClient()"; }
+    ClientEmbed(const ConfigEmbed &config);
+    ~ClientEmbed() { qDebug() << "~LLMClient()"; }
 
     QString chat(const QString &systemPrompt, const QString &userMessage, bool stream);
 
 private:
-    LLMConfig m_config;
     QNetworkAccessManager *m_manager;
 };
 
-#endif // LLMCLIENT_H
+#endif // CLIENTEMBED_H

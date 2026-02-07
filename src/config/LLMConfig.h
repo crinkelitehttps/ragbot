@@ -3,13 +3,12 @@
 
 #include <QString>
 
-// TODO fix these defaults
 // Configuration for remote LLM
 struct LLMConfig {
-    bool enabled = false;
-    QString baseUrl = "http://192.168.0.97:8080/upstream/llama-3.2-8b-instruct";
-    QString model = "llama-3.2-8b-instruct";
-    int timeout = 60000;
+    QString baseUrl;
+    QString model;
+    int timeout;
+    bool isValid() { return !baseUrl.isEmpty() && !model.isEmpty(); }
 };
 
 #endif // LLMCONFIG_H

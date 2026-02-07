@@ -1,32 +1,20 @@
 // Modified to use local llama-swap embedding server
 #include "Embedder.h"
 #include "db/EmbeddingDatabase.h"
-#include "config/LLMConfigEmbedder.h"
+#include "config/ConfigEmbed.h"
 
 
 //--------------------------------------------------------------------------------
-Embedder::Embedder(const LLMConfigEmbedder &config)
-    : m_config(config)
-    , m_manager(new QNetworkAccessManager())
+Embedder::Embedder(const ConfigEmbed &config)
+    : m_network(new QNetworkAccessManager())
+    , m_db("embeddings.db")
 {
-    qDebug() << "Embedder::Embedder()" << config.baseUrl;
-    
-    if (!QFile::exists(config.dbPath)) {
-        qCritical() << "Embedder::Embedder(): Database not found:"
-            << config.dbPath;
-        // Embedder::Embedder(): Create database here;
-    }
-     
-
-    //QString jsonDir = QDir::homePath() + "/source/llama-embedder/json";
+    qDebug() << "Embedder::Embedder()";
     QString jsonDir = QDir::homePath() + "/source/Cataclysm-DDA/data/json";
-    
     if (!QDir(jsonDir).exists()) {
         qCritical() << "Embedder::Embedder(): JSON directory not found:" << jsonDir;
     }
-    
     EmbeddingDatabase db("embedder.db");
-
     processAllFiles();
 }
 
@@ -100,7 +88,7 @@ bool Embedder::embedAndSave(
     if (embedding.isEmpty()) {
         return false;
     }
-    return m_db->saveEmbedding(sourcePath, itemId, text, embedding);
+    return m_db.saveEmbedding(sourcePath, itemId, text, embedding);
 };
 
 
@@ -211,9 +199,10 @@ void Embedder::extractTextRecursive(
 QVector<float> Embedder::generateEmbedding(const QString &text) 
 {
 
+    const auto config = m_config.llmConfig;
     qDebug() << "Embedder::generateEmbedding()" << text;
     QJsonObject request;
-    request["model"] = m_config.model;
+    request["model"] = config.model;
     request["input"] = text;
     
     QJsonDocument doc(request);
@@ -228,11 +217,11 @@ QVector<float> Embedder::generateEmbedding(const QString &text)
     
     QNetworkRequest netRequest;
     qInfo() << "Embedder::generateEmbedding() [ passed network created ]";
-    netRequest.setUrl(QUrl(m_config.baseUrl + "v1/embeddings"));
+    netRequest.setUrl(QUrl(config.baseUrl + "v1/embeddings"));
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    netRequest.setTransferTimeout(m_config.timeout);
+    netRequest.setTransferTimeout(config.timeout);
 
-    QNetworkReply *reply = m_manager->post(netRequest, jsonData);
+    QNetworkReply *reply = m_network->post(netRequest, jsonData);
     
     QEventLoop loop;
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
@@ -240,7 +229,7 @@ QVector<float> Embedder::generateEmbedding(const QString &text)
     QTimer timer;
     timer.setSingleShot(true);
     QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timer.start(m_config.timeout);
+    timer.start(config.timeout);
     
     loop.exec();
     

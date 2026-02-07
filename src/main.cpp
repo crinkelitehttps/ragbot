@@ -5,20 +5,18 @@
 #include <QDebug>
 
 #include "config/LLMConfig.h"
-#include "config/LLMConfigRoleplay.h"
+#include "config/ConfigRoleplay.h"
+#include "config/ConfigEmbed.h"
 #include "db/EmbeddingDatabase.h"
 #include "db/ConversationDatabase.h"
+
 #include "Embedder.h"
-#include "config/LLMConfig.h"
 #include "RAGBot.h"
 
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     
-    QString dbPath = "embeddings.db";
-    QString convDbPath = "conversations.db";
-
     QString model;
     bool isLocal {};
     bool isEmbedMode {};
@@ -40,40 +38,34 @@ int main(int argc, char *argv[])
     const QString port = "8080";
     const QString host = isLocal ? "127.0.0.1" : "192.168.0.97";
     const QString url = QString("http://%1:%2/upstream/%3/").arg(host).arg(port).arg(model);
+
+    LLMConfig llmConfig;
+    llmConfig.baseUrl = url;
+    llmConfig.model = model;
+    llmConfig.timeout = 4 * 60000;
+
+    ConfigEmbed embedConfig;
+    embedConfig.llmConfig = llmConfig;
     
     if(isEmbedMode) {
-        LLMConfigEmbedder embedConfig;
-        embedConfig.enabled = true;
-        embedConfig.baseUrl = url;
-        embedConfig.model = model;
-        embedConfig.timeout = 4 * 60000;
         qInfo() << "Creating Embedder in main";
         Embedder embedder(embedConfig);
     };
-    
-    // Configure research LLM
-    LLMConfig researchConfig;
-    researchConfig.enabled = true;
-    researchConfig.baseUrl = url;
-    researchConfig.model = model;
-    researchConfig.timeout = 4 * 60000;
-    
-    // Configure roleplay
-    LLMConfigRoleplay roleplayConfig;
-    roleplayConfig.enabled = true;
-    roleplayConfig.characterName = "Survivor";
-    
-    if (!roleplayConfig.loadFromFile("characterBackground.txt")) {
-        qWarning() << "Failed to load character background from file, using default";
-        roleplayConfig.characterBackground = "";
-    }
 
-    roleplayConfig.baseUrl = url;
-    roleplayConfig.model = model;
+    ConfigResearch researchConfig;
+    llmConfig.baseUrl = url;
+    llmConfig.model = model;
+    llmConfig.timeout = 4 * 60000;
+    researchConfig.llmConfig = llmConfig;
     
-    EmbeddingDatabase db(dbPath);
-    ConversationDatabase convDb(convDbPath);
-    RAGBot ragbot("placeholder", &db, &convDb, researchConfig, roleplayConfig);
+    
+    ConfigRoleplay roleplayConfig;
+    roleplayConfig.characterName = "Survivor";
+    roleplayConfig.characterBackground = "PLACEHOLDER BACKGROUN";
+    roleplayConfig.llmConfig.baseUrl  = url;
+    roleplayConfig.llmConfig.model = model;
+    
+    RAGBot ragbot(embedConfig, researchConfig, roleplayConfig);
     
     QTimer::singleShot(0, [&ragbot]() {
         ragbot.startChatLoop();
