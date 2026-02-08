@@ -8,7 +8,11 @@
 class EmbeddingDatabase
 {
 public:
-    EmbeddingDatabase(const QString &dbName = "embeddings.db");
+    EmbeddingDatabase(const QString &dbName = "embeddings.db") 
+        : m_db()
+    {
+        initialize(dbName);
+    };
  
     struct SearchResult {
         QString content;
@@ -17,6 +21,7 @@ public:
         float similarity;
     };
 
+    void initialize(QString dbName);
     QVector<SearchResult> search(const QVector<float> &queryEmbedding, int topK = 10);
     int count();
     bool saveEmbedding(const QString &sourceFile, const QString &itemId, 

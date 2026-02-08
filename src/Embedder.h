@@ -18,12 +18,11 @@
 #include <QNetworkRequest>
 #include <QNetworkReply>
 #include <QEventLoop>
-#include "db/EmbeddingDatabase.h"
 #include "config/ConfigEmbed.h"
-
-#include "llm/LLMClient.h"
+#include "db/EmbeddingDatabase.h"
+#include "llama.h"
 #include "llm/ClientEmbed.h"
-
+#include "Generator.h"
 
 class Embedder
 {
@@ -45,10 +44,13 @@ private:
     QVector<float> generateEmbedding(const QString &text);
 
 private:
-    QString m_jsonDir;
-    ConfigEmbed m_config;
     QNetworkAccessManager *m_network;
-    EmbeddingDatabase m_db;
+    ConfigEmbed m_config;
+    EmbeddingDatabase m_embed_db;
+    Generator m_generator;
+
+    llama_context *m_embedCtx;
+    llama_model *m_embedModel;
 
 #ifdef LOCAL_EMBED
     ClientEmbed m_embedClient;

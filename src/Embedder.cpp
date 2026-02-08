@@ -1,20 +1,52 @@
 // Modified to use local llama-swap embedding server
 #include "Embedder.h"
-#include "db/EmbeddingDatabase.h"
 #include "config/ConfigEmbed.h"
 
 
 //--------------------------------------------------------------------------------
 Embedder::Embedder(const ConfigEmbed &config)
     : m_network(new QNetworkAccessManager())
-    , m_db("embeddings.db")
+    , m_config(config)
+    , m_embed_db("embeddings.db")
 {
     qDebug() << "Embedder::Embedder()";
     QString jsonDir = QDir::homePath() + "/source/Cataclysm-DDA/data/json";
     if (!QDir(jsonDir).exists()) {
         qCritical() << "Embedder::Embedder(): JSON directory not found:" << jsonDir;
     }
-    EmbeddingDatabase db("embedder.db");
+    
+    llama_log_set([](ggml_log_level level, const char * text, void * user_data) {
+        Q_UNUSED(user_data)
+        if (level == GGML_LOG_LEVEL_ERROR) {
+            fprintf(stderr, "%s", text);
+        }
+    }, nullptr);
+    
+    llama_backend_init();
+
+    llama_model_params model_params = llama_model_default_params();
+    m_embedModel = llama_model_load_from_file(QString("PLACEHOLDER").toUtf8().constData(), model_params);
+
+    if (!m_embedModel) {
+        qCritical() << "RAGBot::initialize(): Failed to load embedding model";
+    }
+ 
+    llama_context_params ctx_params = llama_context_default_params();
+
+    ctx_params.n_ctx = 2048;
+    ctx_params.n_batch = 2048;
+    ctx_params.n_ubatch = 2048;
+    ctx_params.embeddings = true;
+    ctx_params.pooling_type = LLAMA_POOLING_TYPE_MEAN;
+
+    m_embedCtx = llama_init_from_model(m_embedModel, ctx_params);
+
+    if (!m_embedCtx) {
+        qCritical() << "Embedder::Embedder(): Failed to create embedding context";
+    }
+
+    qDebug() << "\n=== Embedder Ready ===";
+    
     processAllFiles();
 }
 
@@ -22,14 +54,14 @@ Embedder::Embedder(const ConfigEmbed &config)
 //--------------------------------------------------------------------------------
 void Embedder::processAllFiles()
 {
-    qDebug() << "EmbeddingDatabase::processAllFiles()";
+    qDebug() << "Embedder::processAllFiles()";
     {
         int total = 0, processed = 0;
 
-        m_jsonDir = "/home/joe/source/Cataclysm-DDA/data/json";
+        const auto jsonDir = "/home/joe/source/Cataclysm-DDA/data/json";
         
         QDirIterator countIt(
-                m_jsonDir,
+                jsonDir,
                 QStringList()
                 << "*.json",
                 QDir::Files,
@@ -44,7 +76,7 @@ void Embedder::processAllFiles()
         qDebug() << "Embedder::processAllFiles(): Found" << total << "JSON files";
         
         QDirIterator it(
-                m_jsonDir,
+                jsonDir,
                 QStringList()
                 << "*.json",
                 QDir::Files,
@@ -82,13 +114,14 @@ bool Embedder::embedAndSave(
         const QString &itemId
     ) 
 {
-    qDebug() << "Embedder::embedAndSave()";
-    // Use remote embedder
+    //qDebug() << "Embedder::embedAndSave()";
     QVector<float> embedding = generateEmbedding(text);
     if (embedding.isEmpty()) {
         return false;
     }
-    return m_db.saveEmbedding(sourcePath, itemId, text, embedding);
+#if 1
+    return m_embed_db.saveEmbedding(sourcePath, itemId, text, embedding);
+#endif
 };
 
 
@@ -144,7 +177,7 @@ QString Embedder::extractTextFromJson(
         const QStringList &keys
     ) 
 {
-    qDebug() << "Embedder::extractTextFromJson()";
+    //qDebug() << "Embedder::extractTextFromJson()";
     QStringList texts;
     extractTextRecursive(value, keys, texts);
     return texts.join(" ");
@@ -200,7 +233,6 @@ QVector<float> Embedder::generateEmbedding(const QString &text)
 {
 
     const auto config = m_config.llmConfig;
-    qDebug() << "Embedder::generateEmbedding()" << text;
     QJsonObject request;
     request["model"] = config.model;
     request["input"] = text;
@@ -215,59 +247,76 @@ QVector<float> Embedder::generateEmbedding(const QString &text)
         qWarning() << "Embedder::generateEmbedding() jsonData.isEmpty()";
     }
     
-    QNetworkRequest netRequest;
-    qInfo() << "Embedder::generateEmbedding() [ passed network created ]";
-    netRequest.setUrl(QUrl(config.baseUrl + "v1/embeddings"));
-    netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    netRequest.setTransferTimeout(config.timeout);
-
-    QNetworkReply *reply = m_network->post(netRequest, jsonData);
-    
-    QEventLoop loop;
-    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    
-    QTimer timer;
-    timer.setSingleShot(true);
-    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timer.start(config.timeout);
-    
-    loop.exec();
-    
     QVector<float> embedding;
-    
-    if (timer.isActive()) {
-        timer.stop();
+
+    const auto parse = [=] (QByteArray responseData)  {
+        QVector<float> embedding;
+        QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
         
-        if (reply->error() == QNetworkReply::NoError) {
-            QByteArray responseData = reply->readAll();
-            QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        if (!responseDoc.isNull()) {
+            QJsonObject obj = responseDoc.object();
             
-            if (!responseDoc.isNull()) {
-                QJsonObject obj = responseDoc.object();
-                
-                // Parse OpenAI-compatible embeddings response
-                if (obj.contains("data")) {
-                    QJsonArray dataArray = obj["data"].toArray();
-                    if (!dataArray.isEmpty()) {
-                        QJsonObject firstItem = dataArray[0].toObject();
-                        if (firstItem.contains("embedding")) {
-                            QJsonArray embArray = firstItem["embedding"].toArray();
-                            for (const QJsonValue &val : embArray) {
-                                embedding.append(val.toDouble());
-                            }
+            // Parse OpenAI-compatible embeddings response
+            if (obj.contains("data")) {
+                QJsonArray dataArray = obj["data"].toArray();
+                if (!dataArray.isEmpty()) {
+                    QJsonObject firstItem = dataArray[0].toObject();
+                    if (firstItem.contains("embedding")) {
+                        QJsonArray embArray = firstItem["embedding"].toArray();
+                        for (const QJsonValue &val : embArray) {
+                            embedding.append(val.toDouble());
                         }
                     }
                 }
             }
-        } else {
-            qWarning() << "Embedder::generateEmbedding(): Network error:" 
-                << reply->errorString();
         }
-    } else {
-        reply->abort();
-        qWarning() << "Embedder::generateEmbedding(): Request timed out";
-    }
+        return embedding;
+    };
     
-    reply->deleteLater();
+    const auto doNativeRequest = [=] () {
+
+    };
+
+    const auto doNetworkRequest = [&] () {
+        QNetworkRequest netRequest;
+        netRequest.setUrl(QUrl(config.baseUrl + "v1/embeddings"));
+        netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+        netRequest.setTransferTimeout(config.timeout);
+
+        QNetworkReply *reply = m_network->post(netRequest, jsonData);
+        
+        QEventLoop loop;
+        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        
+        QTimer timer;
+        timer.setSingleShot(true);
+        QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+        timer.start(config.timeout);
+        
+        loop.exec();
+        
+
+        if (timer.isActive()) {
+            timer.stop();
+            
+            if (reply->error() == QNetworkReply::NoError) {
+                QByteArray responseData = reply->readAll();
+                parse(responseData);
+            } else {
+                qWarning() << "Embedder::generateEmbedding(): Network error:" 
+                    << reply->errorString();
+            }
+        } else {
+            reply->abort();
+            qWarning() << "Embedder::generateEmbedding(): Request timed out";
+        }
+        
+        reply->deleteLater();
+    };
+
+// TODO switch
+    doNetworkRequest();
+// TODO switch
+    doNativeRequest();
     return embedding;
 };

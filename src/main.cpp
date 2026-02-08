@@ -7,9 +7,6 @@
 #include "config/LLMConfig.h"
 #include "config/ConfigRoleplay.h"
 #include "config/ConfigEmbed.h"
-#include "db/EmbeddingDatabase.h"
-#include "db/ConversationDatabase.h"
-
 #include "Embedder.h"
 #include "RAGBot.h"
 

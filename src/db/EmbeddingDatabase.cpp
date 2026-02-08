@@ -8,12 +8,13 @@
 #include "EmbeddingDatabase.h"
 
 //--------------------------------------------------------------------------------
-EmbeddingDatabase::EmbeddingDatabase(const QString &dbName)
+void EmbeddingDatabase::initialize(QString dbName)
 {
     qDebug() << "EmbeddingDatabase::EmbeddingDatabase() dbName " << dbName;
 
     m_db = QSqlDatabase::addDatabase("QSQLITE", "embeddings");
     m_db.setDatabaseName(dbName);
+    m_db.open();
 
     QSqlQuery query(m_db);
 
@@ -126,7 +127,6 @@ bool EmbeddingDatabase::saveEmbedding(
         const QVector<float> &embedding
     ) 
 {
-    qDebug() << "EmbeddingDatabase::saveEmbedding()";
     QSqlQuery query(m_db);
 
     query.prepare(
