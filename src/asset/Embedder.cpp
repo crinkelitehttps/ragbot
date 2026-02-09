@@ -7,13 +7,16 @@
 #include <QEventLoop>
 #include <QTimer>
 #include "Embedder.h"
-#include "config/ConfigEmbed.h"
+#include "../generation/Generator.h"
+#include "../generation/GeneratorImmediate.h"
+#include "../generation/GeneratorIP.h"
 
 
 //--------------------------------------------------------------------------------
 Embedder::Embedder(ConfigEmbed config)
     : m_config(config)
     , m_embed_db("embeddings.db")
+    , m_generator(initGenerator())
 {
     qDebug() << "Embedder::Embedder()";
 
@@ -76,7 +79,30 @@ void Embedder::processAllFiles()
             << processed
             << "files";
     }
+
+    //Generator generator = new GeneratorImmediate(m_config.generatorConfig);
 };
+
+
+//--------------------------------------------------------------------------------
+Generator* Embedder::initGenerator()
+{
+    auto driverLoaded = [](Generator* generator) {
+        if (generator->isValid() ) {
+            return generator;
+        }
+        delete generator;
+        return static_cast<Generator*>(nullptr);
+    };
+
+    if (auto* generator = driverLoaded(new GeneratorImmediate(m_config.generatorConfig))) {
+        return generator;
+    }
+    if (auto* generator = driverLoaded(new GeneratorIP(m_config.generatorConfig))) {
+        return generator;
+    }
+    return static_cast<Generator*>(nullptr);
+}; 
 
 
 //--------------------------------------------------------------------------------

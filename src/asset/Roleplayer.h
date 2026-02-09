@@ -2,8 +2,8 @@
 #ifndef ROLEPLAYER_H
 #define ROLEPLAYER_H
 
-#include "config/ConfigRoleplay.h"
-#include "db/EmbeddingDatabase.h"
+#include "../config/ConfigRoleplay.h"
+#include "../db/EmbeddingDatabase.h"
 #include "llama.h"
 
 class Roleplayer

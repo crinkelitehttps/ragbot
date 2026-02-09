@@ -9,7 +9,7 @@
 #include "config/ConfigEmbed.h"
 #include "config/ConfigGenerator.h"
 
-#include "Embedder.h"
+#include "asset/Embedder.h"
 
 #include "RAGBot.h"
 

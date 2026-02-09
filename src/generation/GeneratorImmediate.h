@@ -3,7 +3,7 @@
 #include <QByteArray>
 
 #include "Generator.h"
-#include "config/ConfigGenerator.h"
+#include "../config/ConfigGenerator.h"
 #include <QDir>
 
 #include "llama.h"
@@ -19,9 +19,10 @@ class GeneratorImmediate : public virtual Generator
 public:
     GeneratorImmediate(ConfigGenerator generatorConfig);
 
-    void hello() override;
-    bool isValid() override ( return generatorConfig.);
+    bool isValid() override { return m_config.isValid() && m_config.isImmediate; };
+    QByteArray generate(QByteArray question) override;
     
+    ConfigGenerator m_config;
     llama_context *m_embedCtx;
     llama_model *m_embedModel;
 };

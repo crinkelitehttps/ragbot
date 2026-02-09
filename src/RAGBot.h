@@ -8,9 +8,9 @@
 #include "config/ConfigRoleplay.h"
 #include "config/ConfigResearch.h"
 
-#include "Researcher.h"
-#include "Embedder.h"
-#include "Roleplayer.h"
+#include "asset/Embedder.h"
+#include "asset/Researcher.h"
+#include "asset/Roleplayer.h"
 
 class RAGBot
 {

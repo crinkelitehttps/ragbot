@@ -2,8 +2,8 @@
 #ifndef RESEARCHER_H
 #define RESEARCHER_H
 
-#include "config/ConfigResearch.h"
-#include "db/EmbeddingDatabase.h"
+#include "../config/ConfigResearch.h"
+#include "../db/EmbeddingDatabase.h"
 
 class Researcher
 {

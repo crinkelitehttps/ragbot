@@ -1,24 +1,31 @@
+#include <QTimer>
+#include <QEventLoop>
+#include <QNetworkReply>
 #include "GeneratorIP.h"
 
-
 GeneratorIP::GeneratorIP(ConfigGenerator generatorConfig)
-    : Generator(generatorConfig)
+       : Generator(generatorConfig)
+       , m_config(generatorConfig) 
+{
+};
+
+QByteArray GeneratorIP::generate(QByteArray question) 
 {
     QNetworkRequest netRequest;
-#if 0
-    netRequest.setUrl(QUrl(m_config.generatorConfig.modelName + "v1/embeddings"));
+    netRequest.setUrl(QUrl(m_config.modelName + "v1/embeddings"));
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    netRequest.setTransferTimeout(m_config.generatorConfig.timeout);
+    netRequest.setTransferTimeout(m_config.timeout);
     
     // move netowrk to genreator;
-    QNetworkReply *reply = m_network->post(netRequest, jsonData);
+#if 0
+    QNetworkReply *reply = m_network.post(netRequest, jsonData);
     QEventLoop loop;
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
     
     QTimer timer;
     timer.setSingleShot(true);
     QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timer.start(m_config.generatorConfig.timeout);
+    timer.start(m_config.timeout);
     
     loop.exec();
     
@@ -40,9 +47,6 @@ GeneratorIP::GeneratorIP(ConfigGenerator generatorConfig)
     
     reply->deleteLater();
 #endif
+    return QByteArray();
 };
 
-void GeneratorIP::hello()
-{
-    qDebug() << "GeneratorIP::hello()";
-};
