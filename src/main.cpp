@@ -4,10 +4,13 @@
 #include <QTimer>
 #include <QDebug>
 
-#include "config/LLMConfig.h"
+#include "config/ConfigResearch.h"
 #include "config/ConfigRoleplay.h"
 #include "config/ConfigEmbed.h"
+#include "config/ConfigGenerator.h"
+
 #include "Embedder.h"
+
 #include "RAGBot.h"
 
 int main(int argc, char *argv[])
@@ -36,13 +39,14 @@ int main(int argc, char *argv[])
     const QString host = isLocal ? "127.0.0.1" : "192.168.0.97";
     const QString url = QString("http://%1:%2/upstream/%3/").arg(host).arg(port).arg(model);
 
-    LLMConfig llmConfig;
-    llmConfig.baseUrl = url;
-    llmConfig.model = model;
-    llmConfig.timeout = 4 * 60000;
+    ConfigGenerator embedGeneratorConfig;
+    embedGeneratorConfig.basePath = url;
+    embedGeneratorConfig.modelName = model;
+    embedGeneratorConfig.timeout = 4 * 60000;
 
     ConfigEmbed embedConfig;
-    embedConfig.llmConfig = llmConfig;
+    embedConfig.dbName = "embeddings.db";
+    embedConfig.generatorConfig = embedGeneratorConfig;
     
     if(isEmbedMode) {
         qInfo() << "Creating Embedder in main";
@@ -50,17 +54,18 @@ int main(int argc, char *argv[])
     };
 
     ConfigResearch researchConfig;
-    llmConfig.baseUrl = url;
-    llmConfig.model = model;
-    llmConfig.timeout = 4 * 60000;
-    researchConfig.llmConfig = llmConfig;
+    ConfigGenerator researchGeneratorConfig;
+    researchGeneratorConfig.basePath = url;
+    researchGeneratorConfig.modelName = model;
+    researchGeneratorConfig.timeout = 4 * 60000;
+    researchConfig.generatorConfig = researchGeneratorConfig;
     
     
     ConfigRoleplay roleplayConfig;
+    ConfigGenerator roleplayGeneratorConfig;
     roleplayConfig.characterName = "Survivor";
     roleplayConfig.characterBackground = "PLACEHOLDER BACKGROUN";
-    roleplayConfig.llmConfig.baseUrl  = url;
-    roleplayConfig.llmConfig.model = model;
+    roleplayConfig.generatorConfig = roleplayGeneratorConfig;
     
     RAGBot ragbot(embedConfig, researchConfig, roleplayConfig);
     

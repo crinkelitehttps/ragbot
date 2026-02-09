@@ -3,11 +3,11 @@
 
 #include <QString>
 #include <QDebug>
-#include "LLMConfig.h"
+#include "ConfigGenerator.h"
 
 struct ConfigResearch {
     QString instruction = "PLACEHOLDER_RESEARCH_INTRUCTION";
-    LLMConfig llmConfig;
+    ConfigGenerator generatorConfig;
 };
 
 #endif //CONFIGRESEARCH_H 

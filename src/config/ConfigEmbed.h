@@ -2,12 +2,13 @@
 #define CONFIGEMBED_H
 
 #include <QString>
-#include "LLMConfig.h"
+#include "ConfigGenerator.h"
 
 struct ConfigEmbed {
     QString dbName;
-    LLMConfig llmConfig;
-    bool isValid() { return dbName.isEmpty() && llmConfig.isValid(); }
+    ConfigGenerator generatorConfig;
+
+    bool isValid() { return !dbName.isEmpty() && generatorConfig.isValid(); }
 };
 
 #endif // CONFIGEMBED_H

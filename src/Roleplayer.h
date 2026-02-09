@@ -5,22 +5,13 @@
 #include "config/ConfigRoleplay.h"
 #include "db/EmbeddingDatabase.h"
 #include "llama.h"
-#include "llm/ClientEmbed.h"
 
 class Roleplayer
 {
 public:
-    Roleplayer(const ConfigRoleplay &roleplayerConfig);
-    
-    ~Roleplayer()
-    {
-        delete m_network;
-    }
+    Roleplayer(const ConfigRoleplay &roleplayerConfig) : m_config(roleplayerConfig) {};
 
 private:
-
-private:
-    QNetworkAccessManager *m_network;
     ConfigRoleplay m_config;
     EmbeddingDatabase m_embed_db;
 };

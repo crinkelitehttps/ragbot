@@ -2,22 +2,14 @@
 #define ROLEPLAYLLMCONFIG_H
 
 #include <QString>
-#include <QFile>
-#include <QIODevice>
-#include <QDebug>
-#include "LLMConfig.h"
+#include "ConfigGenerator.h"
 
 struct ConfigRoleplay {
-
-    bool isValid() { 
-        return !characterBackground.isEmpty()
-            && !characterBackground.isEmpty() 
-            && llmConfig.isValid(); 
-    }
-
     QString characterName = "Survivor";
     QString characterBackground = "PLACEHOLDER BACKGROUND";
-    LLMConfig llmConfig;
+    ConfigGenerator generatorConfig;
+    bool isValid() { return !characterName.isEmpty() && !characterBackground.isEmpty(); }
+
 };
 
 #endif // ROLEPLAYLLMCONFIG_H

@@ -1,23 +1,17 @@
-#include "RAGBot.h"
 #include <QTextStream>
 #include <QDebug>
 #include <QCoreApplication>
 #include <QFile>
-#include "Embedder.h"
+
+#include "RAGBot.h"
+
 // llama_silenced.h
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-#pragma GCC diagnostic ignored "-Wsign-compare"
-
-#include "common.h"
-
-#pragma GCC diagnostic pop
 
 
 RAGBot::RAGBot(
-        ConfigEmbed &embedConfig,
-        ConfigResearch &researchConfig,
-        ConfigRoleplay &roleplayConfig
+        ConfigEmbed embedConfig,
+        ConfigResearch researchConfig,
+        ConfigRoleplay roleplayConfig
     )
     : m_embedder(embedConfig)
     , m_researcher(researchConfig)
@@ -50,10 +44,10 @@ void RAGBot::startChatLoop()
 
 void RAGBot::processQuestion(const QString &question)
 {
-#if 1
     qDebug() << "RAGBot::processQuestion(): " << question;
+#if 0
     
-    QVector<float> queryEmb = generateEmbedding(question);
+    QVector<float> queryEmb = .generateEmbedding(question);
     if (queryEmb.isEmpty()) {
         qWarning() << "RAGBot::processQuestion(): Failed to generate query embedding";
         return;
@@ -150,6 +144,7 @@ void RAGBot::processQuestion(const QString &question)
 
 void RAGBot::cleanup()
 {
+    qDebug() << "RAGBot::cleanup()";
 #if 0
     if (m_embedCtx) {
         llama_free(m_embedCtx);
