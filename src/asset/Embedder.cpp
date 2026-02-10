@@ -7,7 +7,6 @@
 #include <QEventLoop>
 #include <QTimer>
 #include "Embedder.h"
-#include "../generation/Generator.h"
 #include "../generation/GeneratorImmediate.h"
 #include "../generation/GeneratorIP.h"
 
@@ -80,7 +79,6 @@ void Embedder::processAllFiles()
             << "files";
     }
 
-    //Generator generator = new GeneratorImmediate(m_config.generatorConfig);
 };
 
 
@@ -96,11 +94,14 @@ Generator* Embedder::initGenerator()
     };
 
     if (auto* generator = driverLoaded(new GeneratorImmediate(m_config.generatorConfig))) {
+        qDebug() << "Embedder::initGenerator() [ GeneratorImmediate ]";
         return generator;
     }
     if (auto* generator = driverLoaded(new GeneratorIP(m_config.generatorConfig))) {
+        qDebug() << "Embedder::initGenerator() [ GeneratorIP ]";
         return generator;
     }
+    qDebug() << "Embedder::initGenerator() [ nullptr ]";
     return static_cast<Generator*>(nullptr);
 }; 
 
@@ -112,7 +113,6 @@ bool Embedder::embedAndSave(
         const QString &itemId
     ) 
 {
-    qDebug() << "Embedder::embedAndSave()";
     QVector<float> embedding = generateEmbedding(text);
     if (embedding.isEmpty()) {
         return false;
@@ -225,13 +225,11 @@ void Embedder::extractTextRecursive(
 
 
 //--------------------------------------------------------------------------------
-QVector<float> Embedder::generateEmbedding(const QString &text) 
+QVector<float> Embedder::generateEmbedding(QString input) 
 {
-
     QJsonObject request;
-    request["model"] = m_config.generatorConfig.modelName;
-    request["input"] = text;
-    
+    request["input"] = input;
+
     QJsonDocument doc(request);
     if (doc.isEmpty()) {
         qWarning() << "Embedder::generateEmbedding() doc.isEmpty()";
@@ -241,119 +239,10 @@ QVector<float> Embedder::generateEmbedding(const QString &text)
     if (jsonData.isEmpty()) {
         qWarning() << "Embedder::generateEmbedding() jsonData.isEmpty()";
     }
-    
+
     QVector<float> embedding;
-
-#if 0
-    const auto parse = [] (QByteArray &responseData, QVector<float>& embedding)  {
-
-        QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
-        
-        if (!responseDoc.isNull()) {
-            QJsonObject obj = responseDoc.object();
-            
-            // Parse OpenAI-compatible embeddings response
-            if (obj.contains("data")) {
-                QJsonArray dataArray = obj["data"].toArray();
-                if (!dataArray.isEmpty()) {
-                    QJsonObject firstItem = dataArray[0].toObject();
-                    if (firstItem.contains("embedding")) {
-                        QJsonArray embArray = firstItem["embedding"].toArray();
-                        for (const QJsonValue &val : embArray) {
-                            embedding.append(val.toDouble());
-                        }
-                    }
-                }
-            }
-        }
-    };
-
-    const auto doNativeRequest = [&] () {
-        QVector<float> result;
-        std::vector<llama_token> tokens = common_tokenize(m_embedCtx, text.toStdString(), true);
-        if (tokens.empty()) return result;
-        
-        unsigned int max_tokens = llama_n_ctx(m_embedCtx) - 10;
-        if (tokens.size() > max_tokens) {
-            tokens.resize(max_tokens);
-        }
-        
-        llama_batch batch = llama_batch_init(tokens.size(), 0, 1);
-        for (size_t i = 0; i < tokens.size(); i++) {
-            common_batch_add(batch, tokens[i], i, {0}, true);
-        }
-        
-        if (llama_encode(m_embedCtx, batch) != 0) {
-            llama_batch_free(batch);
-            return result;
-        }
-        
-        llama_synchronize(m_embedCtx);
-        
-        int n_embd = llama_model_n_embd(m_embedModel);
-        const float *embeddings = llama_get_embeddings_seq(m_embedCtx, 0);
-        
-        if (!embeddings) {
-            embeddings = llama_get_embeddings(m_embedCtx);
-        }
-        
-        if (embeddings) {
-            result.resize(n_embd);
-            for (int i = 0; i < n_embd; i++) {
-                result[i] = embeddings[i];
-            }
-        }
-        
-        llama_batch_free(batch);
-        return result;
-    };
-
-#endif
-#if 0
-    const auto doNetworkRequest = [&] () {
-        QNetworkRequest netRequest;
-        netRequest.setUrl(QUrl(m_config.generatorConfig.modelName + "v1/embeddings"));
-        netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-        netRequest.setTransferTimeout(m_config.generatorConfig.timeout);
-
-        // move netowrk to genreator;
-        QNetworkReply *reply = m_network->post(netRequest, jsonData);
-        QEventLoop loop;
-        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-        
-        QTimer timer;
-        timer.setSingleShot(true);
-        QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-        timer.start(m_config.generatorConfig.timeout);
-        
-        loop.exec();
-        
-
-        if (timer.isActive()) {
-            timer.stop();
-            
-            if (reply->error() == QNetworkReply::NoError) {
-                QByteArray responseData = reply->readAll();
-                parse(responseData, embedding);
-            } else {
-                qWarning() << "Embedder::generateEmbedding(): Network error:" 
-                    << reply->errorString();
-            }
-        } else {
-            reply->abort();
-            qWarning() << "Embedder::generateEmbedding(): Request timed out";
-        }
-        
-        reply->deleteLater();
-    };
-
-    bool isNative = false;
-    if (isNative) {
-        doNativeRequest();
-    } else {
-        doNetworkRequest();
-    };
-#endif
+    m_generator->generate(doc.toJson());
 
     return embedding;
 };
+

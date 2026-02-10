@@ -4,6 +4,7 @@
 
 #include "../config/ConfigRoleplay.h"
 #include "../db/EmbeddingDatabase.h"
+#include "../db/RoleplayDatabase.h"
 #include "llama.h"
 
 class Roleplayer
@@ -13,7 +14,7 @@ public:
 
 private:
     ConfigRoleplay m_config;
-    EmbeddingDatabase m_embed_db;
+    RoleplayDatabase m_roleplay_db;
 };
 
 #endif // ROLEPLAYER_H

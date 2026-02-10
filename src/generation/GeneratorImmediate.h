@@ -19,8 +19,10 @@ class GeneratorImmediate : public virtual Generator
 public:
     GeneratorImmediate(ConfigGenerator generatorConfig);
 
+    // TODO isImmediate
     bool isValid() override { return m_config.isValid() && m_config.isImmediate; };
-    QByteArray generate(QByteArray question) override;
+    QVector<float> generate(QString data) override;
+    QString generateText(QString systemMessage, QString prompt, bool isStream) override;
     
     ConfigGenerator m_config;
     llama_context *m_embedCtx;

@@ -1,6 +1,10 @@
 #include "GeneratorImmediate.h"
 #include "../config/ConfigGenerator.h"
+#include <QJsonObject>
+#include "llama.h"
 
+
+//--------------------------------------------------------------------------------
 GeneratorImmediate::GeneratorImmediate(ConfigGenerator generatorConfig) 
     : Generator(generatorConfig)
     , m_config(generatorConfig)
@@ -20,7 +24,9 @@ GeneratorImmediate::GeneratorImmediate(ConfigGenerator generatorConfig)
     llama_backend_init();
 
     llama_model_params model_params = llama_model_default_params();
-    m_embedModel = llama_model_load_from_file(QString("PLACEHOLDER-MODEL-NAME").toUtf8().constData(), model_params);
+
+    m_embedModel = llama_model_load_from_file(QString("/home/joe/.local/models/nomic-embed-text-v1.5.f32.gguf")
+            .toUtf8().constData(), model_params);
 
     if (!m_embedModel) {
         qCritical() << "RAGBot::initialize(): Failed to load embedding model";
@@ -41,46 +47,54 @@ GeneratorImmediate::GeneratorImmediate(ConfigGenerator generatorConfig)
     }
 }
 
-QByteArray GeneratorImmediate::generate(QByteArray question) 
+
+//--------------------------------------------------------------------------------
+QVector<float> GeneratorImmediate::generate(QString data) 
 {
-    QString roleplayAnswer;
+    // this code should be in an embedding fucntion. Possibly in the superior class
+    auto vt = common_tokenize(m_embedCtx, data.toStdString(), true);
+    auto tokens = QVector<llama_token>(vt.begin(), vt.end());
+    if (tokens.isEmpty()) return {};
     
-    // Stage 2: Roleplay response
-    qDebug() << "RAGBot::processQuestion(): Roleplay Response";
-
-    QFile roleplayPromptFile("roleplayPrompt.txt");
-    QString rp;
-    
-    if (roleplayPromptFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        rp = QString::fromUtf8(roleplayPromptFile.readAll());
-        roleplayPromptFile.close();
-    } else {
-        qWarning() << "RAGBot::processQuestion(): Failed to open roleplayPrompt.txt";
+    int max_tokens = llama_n_ctx(m_embedCtx) - 10;
+    if (tokens.size() > max_tokens) {
+        tokens.resize(max_tokens);
     }
     
-#if 0
-    QString roleplayPrompt = rp.arg("Survivor", researchAnswer, question);
-    qDebug() << roleplayPrompt;
-    
-    QTextStream(stdout) << "\n" << m_config.characterName << ": " << Qt::flush;
-    roleplayAnswer = m_roleplayLLM->chat(
-        m_rpConfig.characterBackground,
-        roleplayPrompt,
-        true
-    );
-
-#endif
-    QTextStream(stdout) << "\n" << Qt::flush;
-    
-    if (roleplayAnswer.isEmpty()) {
-        qWarning() << "RAGBot::processQuestio(): No response from roleplay LLM";
+    llama_batch batch = llama_batch_init(tokens.size(), 0, 1);
+    for (size_t i = 0; i < tokens.size(); i++) {
+        common_batch_add(batch, tokens[i], i, {0}, true);
     }
     
-#if 0
-    // Log conversation to database
-    if (!m_convDb->logConversation(queryEmb, question, researchAnswer, roleplayAnswer)) {
-        qWarning() << "RAGBot::processQuestion(): Failed to log conversation to database";
+    if (llama_encode(m_embedCtx, batch) != 0) {
+        llama_batch_free(batch);
+        return {};
     }
-#endif
-    return QByteArray();
+    
+    llama_synchronize(m_embedCtx);
+    
+    int n_embd = llama_model_n_embd(m_embedModel);
+    const float *embeddings = llama_get_embeddings_seq(m_embedCtx, 0);
+    
+    if (!embeddings) {
+        embeddings = llama_get_embeddings(m_embedCtx);
+    }
+    
+    QVector<float> result;
+    if (embeddings) {
+        result.resize(n_embd);
+        for (int i = 0; i < n_embd; i++) {
+            result[i] = embeddings[i];
+        }
+    }
+    
+    llama_batch_free(batch);
+    return result;
 };
+
+
+//--------------------------------------------------------------------------------
+QString GeneratorImmediate::generateText(QString systemMessage, QString prompt, bool isStream) 
+{
+    return QString();
+}

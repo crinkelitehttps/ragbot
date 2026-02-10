@@ -1,9 +1,9 @@
-#include "ConversationDatabase.h"
+#include "RoleplayDatabase.h"
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDebug>
 
-ConversationDatabase::ConversationDatabase(const QString &dbName)
+RoleplayDatabase::RoleplayDatabase(const QString &dbName)
 {
     m_db = QSqlDatabase::addDatabase("QSQLITE", "conversations");
     m_db.setDatabaseName(dbName);
@@ -16,7 +16,7 @@ ConversationDatabase::ConversationDatabase(const QString &dbName)
     initializeSchema();
 }
 
-bool ConversationDatabase::logConversation(const QVector<float> &queryEmbedding,
+bool RoleplayDatabase::logConversation(const QVector<float> &queryEmbedding,
                     const QString &query,
                     const QString &researchResponse,
                     const QString &roleplayResponse)
@@ -44,14 +44,14 @@ bool ConversationDatabase::logConversation(const QVector<float> &queryEmbedding,
     return true;
 }
 
-bool ConversationDatabase::isInitialized() const
+bool RoleplayDatabase::isInitialized() const
 {
     QSqlQuery query(m_db);
     query.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='conversations'");
     return query.exec() && query.next();
 }
 
-void ConversationDatabase::initializeSchema()
+void RoleplayDatabase::initializeSchema()
 {
     QSqlQuery query(m_db);
     

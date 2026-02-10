@@ -7,7 +7,7 @@
 
 // llama_silenced.h
 
-
+//--------------------------------------------------------------------------------
 RAGBot::RAGBot(
         ConfigEmbed embedConfig,
         ConfigResearch researchConfig,
@@ -21,6 +21,7 @@ RAGBot::RAGBot(
 }
 
 
+//--------------------------------------------------------------------------------
 void RAGBot::startChatLoop()
 {
     QTextStream in(stdin);
@@ -42,18 +43,19 @@ void RAGBot::startChatLoop()
 }
 
 
+//--------------------------------------------------------------------------------
 void RAGBot::processQuestion(const QString &question)
 {
     qDebug() << "RAGBot::processQuestion(): " << question;
-#if 0
+#if 1
     
-    QVector<float> queryEmb = .generateEmbedding(question);
+    QVector<float> queryEmb = m_embedder.generateEmbedding(question);
     if (queryEmb.isEmpty()) {
         qWarning() << "RAGBot::processQuestion(): Failed to generate query embedding";
         return;
     }
     
-    auto results = m_db->search(queryEmb, 10);
+    auto results = m_embed_db.search(queryEmb, 10);
     
     if (results.isEmpty()) {
         qDebug() << "RAGBot::processQuestio(): No relevant documents found";
@@ -87,10 +89,12 @@ void RAGBot::processQuestion(const QString &question)
     qDebug() << question;
     qDebug() << researchAnswer;
     
-    if (m_llmConfig.enabled) {
+    if (true) {
         qInfo() << "m_llmConfig.enabled";
         QTextStream(stdout) << "\nBot (Research): " << Qt::flush;
-        researchAnswer = m_remoteLLM->chat("", researchPrompt, false);
+#if 0
+        researchAnswer = m_roleplayer->chat("", researchPrompt, false);
+#endif
         QTextStream(stdout) << "\n" << Qt::flush;
     } else {
         qDebug() << "Would call local research model here";
@@ -105,7 +109,7 @@ void RAGBot::processQuestion(const QString &question)
     QString roleplayAnswer;
     
     // Stage 2: Roleplay response
-    if (m_rpConfig.enabled && m_roleplayLLM) {
+    if (true) {
         qDebug() << "RAGBot::processQuestion(): Roleplay Response";
 
         QFile roleplayPromptFile("roleplayPrompt.txt");
@@ -121,13 +125,15 @@ void RAGBot::processQuestion(const QString &question)
         QString roleplayPrompt = rp.arg("Survivor", researchAnswer, question);
         qDebug() << roleplayPrompt;
         
-        QTextStream(stdout) << "\n" << m_rpConfig.characterName << ": " << Qt::flush;
+#if 0
+        QTextStream(stdout) << "\n" << m_config.characterName << ": " << Qt::flush;
         roleplayAnswer = m_roleplayLLM->chat(
             m_rpConfig.characterBackground,
             roleplayPrompt,
             true
         );
 
+#endif 
         QTextStream(stdout) << "\n" << Qt::flush;
         
         if (roleplayAnswer.isEmpty()) {
@@ -136,12 +142,14 @@ void RAGBot::processQuestion(const QString &question)
     }
     
     // Log conversation to database
-    if (!m_convDb->logConversation(queryEmb, question, researchAnswer, roleplayAnswer)) {
+    if (!m_conversation_db.logConversation(queryEmb, question, researchAnswer, roleplayAnswer)) {
         qWarning() << "RAGBot::processQuestion(): Failed to log conversation to database";
     }
 #endif
 }
 
+
+//--------------------------------------------------------------------------------
 void RAGBot::cleanup()
 {
     qDebug() << "RAGBot::cleanup()";

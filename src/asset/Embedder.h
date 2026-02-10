@@ -18,12 +18,11 @@ public:
 
     void processAllFiles();
 
-private:
     bool embedAndSave(const QString &text, const QString &sourcePath, const QString &itemId);
     bool embedFile(const QString &inputPath);
     QString extractTextFromJson(const QJsonValue &value, const QStringList &keys);
     void extractTextRecursive(const QJsonValue &value, const QStringList &keys, QStringList &texts);
-    QVector<float> generateEmbedding(const QString &text);
+    QVector<float> generateEmbedding(QString text);
     Generator* initGenerator();
 
 private:

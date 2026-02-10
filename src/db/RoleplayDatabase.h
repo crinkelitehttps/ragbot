@@ -1,14 +1,14 @@
-#ifndef CONVERSATIONDATABASE_H
-#define CONVERSATIONDATABASE_H
+#ifndef ROLEPLAYDATABASE_H
+#define ROLEPLAYDATABASE_H
 
 #include <QString>
 #include <QVector>
 #include <QSqlDatabase>
 
-class ConversationDatabase
+class RoleplayDatabase
 {
 public:
-    ConversationDatabase(const QString &dbName = "conversations.db");
+    RoleplayDatabase(const QString &dbName = "conversations.db");
     
     bool logConversation(const QVector<float> &queryEmbedding,
                         const QString &query,
@@ -23,4 +23,4 @@ private:
     QSqlDatabase m_db;
 };
 
-#endif // CONVERSATIONDATABASE_H
+#endif // ROLEPLAYDATABASE_H

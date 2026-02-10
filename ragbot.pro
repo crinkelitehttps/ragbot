@@ -11,9 +11,9 @@ SOURCES += \
     src/RAGBot.cpp \
     src/asset/Embedder.cpp \
     src/db/EmbeddingDatabase.cpp \
-    src/db/ConversationDatabase.cpp \
-    src/generator/GeneratorImmediate.cpp \
-    src/generator/GeneratorIP.cpp
+    src/db/RoleplayDatabase.cpp \
+    src/generation/GeneratorImmediate.cpp \
+    src/generation/GeneratorIP.cpp
 
 # Header files
 HEADERS += \
@@ -26,10 +26,10 @@ HEADERS += \
     src/config/ConfigRoleplay.h \
     src/config/ConfigGenerator.h \
     src/db/EmbeddingDatabase.h \
-    src/db/ConversationDatabase.h \
-    src/generator/Generator.h \
-    src/generator/GeneratorImmediate.h \
-    src/generator/GeneratorIP.h
+    src/db/RoleplayDatabase.h \
+    src/generation/Generator.h \
+    src/generation/GeneratorImmediate.h \
+    src/generation/GeneratorIP.h
 
 # Include paths
 # Force Qt from home directory, NOT system repos
