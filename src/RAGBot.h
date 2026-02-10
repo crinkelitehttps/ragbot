@@ -30,13 +30,15 @@ private:
     void processQuestion(const QString &question);
 
 private:
+    Embedder m_embedder;
+    EmbeddingDatabase m_embed_db;
+    
     Researcher m_researcher;
 
     Roleplayer m_roleplayer;
     RoleplayDatabase m_conversation_db;
+    
 
-    Embedder m_embedder;
-    EmbeddingDatabase m_embed_db;
 };
 
 #endif // RAGBOT_H

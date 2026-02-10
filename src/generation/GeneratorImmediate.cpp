@@ -51,18 +51,19 @@ GeneratorImmediate::GeneratorImmediate(ConfigGenerator generatorConfig)
 //--------------------------------------------------------------------------------
 QVector<float> GeneratorImmediate::generate(QString data) 
 {
-    // this code should be in an embedding fucntion. Possibly in the superior class
     auto vt = common_tokenize(m_embedCtx, data.toStdString(), true);
     auto tokens = QVector<llama_token>(vt.begin(), vt.end());
+
     if (tokens.isEmpty()) return {};
     
     int max_tokens = llama_n_ctx(m_embedCtx) - 10;
+
     if (tokens.size() > max_tokens) {
         tokens.resize(max_tokens);
     }
     
     llama_batch batch = llama_batch_init(tokens.size(), 0, 1);
-    for (size_t i = 0; i < tokens.size(); i++) {
+    for (int i = 0; i < tokens.size(); i++) {
         common_batch_add(batch, tokens[i], i, {0}, true);
     }
     
@@ -96,5 +97,8 @@ QVector<float> GeneratorImmediate::generate(QString data)
 //--------------------------------------------------------------------------------
 QString GeneratorImmediate::generateText(QString systemMessage, QString prompt, bool isStream) 
 {
+    Q_UNUSED(systemMessage)
+    Q_UNUSED(prompt)
+    Q_UNUSED(isStream)
     return QString();
 }

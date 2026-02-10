@@ -21,7 +21,7 @@ public:
     virtual bool isValid() = 0;
 
 protected:
-    Generator(ConfigGenerator generatorConfig) {}
+    Generator(ConfigGenerator) {}
 };
 
 #endif // GENERATOR_H
