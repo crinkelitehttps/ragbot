@@ -241,7 +241,7 @@ QVector<float> Embedder::generateEmbedding(QString input)
     }
 
     QVector<float> embedding;
-    m_generator->generate(doc.toJson());
+    embedding = m_generator->generate(doc.toJson());
 
     return embedding;
 };
