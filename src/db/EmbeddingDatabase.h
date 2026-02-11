@@ -21,14 +21,26 @@ public:
         float similarity;
     };
 
-    void initialize(QString dbName);
-    QVector<SearchResult> search(const QVector<float> &queryEmbedding, int topK = 10);
+    float cosineSimilarity(const QVector<float> &a, const float *b, int size);
+    QByteArray fileChecksum(const QString& filename); 
+
+    bool isEmbedded(const QString& fileName);
     int count();
-    bool saveEmbedding(const QString &sourceFile, const QString &itemId, 
-                      const QString &content, const QVector<float> &embedding);
+
+    QVector<SearchResult> search(
+            const QVector<float> &queryEmbedding,
+            int topK = 10
+    );
+
+    bool saveEmbedding(
+            const QString &sourceFile,
+            const QString &itemId, 
+            const QString &content,
+            const QVector<float> &embedding
+    );
 
 private:
-    float cosineSimilarity(const QVector<float> &a, const float *b, int size);
+    void initialize(QString dbName);
     QSqlDatabase m_db;
 };
 

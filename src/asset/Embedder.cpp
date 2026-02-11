@@ -59,6 +59,7 @@ void Embedder::processAllFiles()
                 QDirIterator::Subdirectories
         );
         
+// TODO check file hash here
         while (it.hasNext()) {
             QString filePath = it.next();
             QFileInfo fileInfo(filePath);
@@ -240,9 +241,6 @@ QVector<float> Embedder::generateEmbedding(QString input)
         qWarning() << "Embedder::generateEmbedding() jsonData.isEmpty()";
     }
 
-    QVector<float> embedding;
-    embedding = m_generator->generate(doc.toJson());
-
-    return embedding;
+    return m_generator->generate(doc.toJson());
 };
 

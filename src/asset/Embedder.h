@@ -1,4 +1,3 @@
-// Modified to use local llama-swap embedding server
 #ifndef EMBEDDER_H
 #define EMBEDDER_H
 
@@ -26,6 +25,7 @@ public:
     Generator* initGenerator();
 
 private:
+
     ConfigEmbed m_config;
     EmbeddingDatabase m_embed_db;
     Generator* m_generator;
