@@ -114,14 +114,6 @@ Generator* Embedder::initGenerator()
 }; 
 
 
-
-//--------------------------------------------------------------------------------
-Parser* Embedder::initParser()
-{
-    return static_cast<ParserJSON*>(new ParserJSON());
-}; 
-
-
 //--------------------------------------------------------------------------------
 bool Embedder::embedFile(const QString &sourcePath) 
 {

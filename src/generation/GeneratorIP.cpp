@@ -19,18 +19,21 @@ QVector<float> GeneratorIP::generate(QString data)
     request["input"] = data;
     QJsonDocument doc(request);
     if (doc.isEmpty()) {
-        qWarning() << "Embedder::generateEmbedding() doc.isEmpty()";
+        qWarning() << "GeneratorIP::generate() doc.isEmpty()";
     }
     QByteArray jsonData = doc.toJson();
     if (jsonData.isEmpty()) {
-        qWarning() << "Embedder::generateEmbedding() jsonData.isEmpty()";
+        qWarning() << "GeneratorIP::generate() jsonData.isEmpty()";
     }
 
     QNetworkRequest netRequest;
     netRequest.setUrl(QUrl(m_config.basePath+ "v1/embeddings"));
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     netRequest.setTransferTimeout(m_config.timeout);
-    QNetworkReply *reply = m_network.post(netRequest, data.toUtf8());
+
+    qDebug().noquote() << "GeneratorIP::generate()" << data;
+
+    QNetworkReply *reply = m_network.post(netRequest, QString(QJsonDocument(request).toJson(QJsonDocument::Compact)).toUtf8());
     QEventLoop loop;
 
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
@@ -69,12 +72,12 @@ QVector<float> GeneratorIP::generate(QString data)
             QByteArray responseData = reply->readAll();
             parse(responseData, embedding);
         } else {
-            qWarning() << "GeneratorIP::generateEmbedding(): Network error:" 
+            qWarning() << "GeneratorIP::generate(): Network error:" 
                 << reply->errorString();
         }
     } else {
         reply->abort();
-        qWarning() << "GeneratorIP::generateEmbedding(): Request timed out";
+        qWarning() << "GeneratorIP::generate(): Request timed out";
     }
 
     return embedding;
@@ -82,14 +85,15 @@ QVector<float> GeneratorIP::generate(QString data)
 
 
 //--------------------------------------------------------------------------------
-QString GeneratorIP::generateText(QString systemPrompt, QString prompt, bool stream) 
+QString GeneratorIP::generateText(QString systemPrompt, QString prompt, bool isStream) 
 {
     QJsonObject request;
     request["model"] = m_config.modelName;
-    request["stream"] = stream;
+    request["stream"] = isStream;
     
     QJsonArray messages;
-    QString userMessage;
+    QString userMessage = prompt;
+    userMessage = prompt;
     
     if (!systemPrompt.isEmpty()) {
         QJsonObject sysMsg;
@@ -129,7 +133,7 @@ QString GeneratorIP::generateText(QString systemPrompt, QString prompt, bool str
     QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
     timer.start(m_config.timeout);
     
-    if (stream) {
+    if (isStream) {
         QString fullResponse;
         QObject::connect(reply, &QNetworkReply::readyRead, [&]() {
             QByteArray data = reply->readAll();

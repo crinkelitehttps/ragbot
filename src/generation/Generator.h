@@ -13,9 +13,9 @@ public:
     virtual QVector<float> generate(QString data) = 0;
 
     virtual QString generateText(
-            QString systemMessage,
+            QString systemPrompt,
             QString prompt,
-            bool isStream = false
+            bool isStream
     ) = 0;
 
     virtual bool isValid() = 0;

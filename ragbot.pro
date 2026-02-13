@@ -14,7 +14,7 @@ SOURCES += \
     src/db/RoleplayDatabase.cpp \
     src/generation/GeneratorImmediate.cpp \
     src/generation/GeneratorIP.cpp \
-    src/parser/ParserJSON.cpp
+    src/parsers/ParserJSON.cpp
 
 # Header files
 HEADERS += \
@@ -31,8 +31,8 @@ HEADERS += \
     src/generation/Generator.h \
     src/generation/GeneratorImmediate.h \
     src/generation/GeneratorIP.h \
-    src/parser/Parser.h \
-    src/parser/ParserJSON.h
+    src/parsers/Parser.h \
+    src/parsers/ParserJSON.h
 
 # Include paths
 # Force Qt from home directory, NOT system repos

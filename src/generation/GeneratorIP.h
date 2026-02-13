@@ -26,8 +26,8 @@ public:
     QVector<float> generate(QString data) override;
 
     QString generateText(
-            QString systemMessage,
-            QString question,
+            QString systemPrompt,
+            QString prompt,
             bool isStream
     ) override;
 
