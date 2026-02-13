@@ -17,15 +17,14 @@ public:
     }
 
     void processAllFiles();
-    bool updateOrCreate(const QString &text, const QString &sourcePath, const QString &itemId);
-    bool embedFile(const QString &inputPath);
+    bool embedFile(const QString &sourcePath);
 
     Generator* initGenerator();
 
 private:
 
     ConfigEmbed m_config;
-    EmbeddingDatabase m_embed_db;
+    EmbeddingDatabase m_embedDB;
     Generator* m_generator;
     Parser* m_parser;
 

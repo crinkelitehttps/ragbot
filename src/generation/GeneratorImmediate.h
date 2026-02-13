@@ -20,9 +20,9 @@ public:
     GeneratorImmediate(ConfigGenerator generatorConfig);
 
     // TODO isImmediate
-    bool isValid() override { return m_config.isValid() && m_config.isImmediate; };
-    QVector<float> generate(QString data) override;
-    QString generateText(QString systemMessage, QString prompt, bool isStream) override;
+    const bool isValid() override { return m_config.isValid() && m_config.isImmediate; };
+    const QVector<float> generate(const QString& data) override;
+    const QString generateText(QString& systemMessage, QString& prompt, bool isStream) override;
     
     ConfigGenerator m_config;
     llama_context *m_embedCtx;

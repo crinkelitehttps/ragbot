@@ -9,8 +9,7 @@ class Parser
 {
 public:
     virtual ~Parser() = default;
-    virtual QString extractTextFromJson(const QJsonValue &value) = 0;
-    virtual void extractTextRecursive(const QJsonValue &value, QStringList &texts) = 0;
+    virtual const QString extractText(const QByteArray &value) = 0;
 
 protected:
     Parser() {}

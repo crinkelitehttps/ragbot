@@ -10,15 +10,15 @@ class Generator
 public:
     virtual ~Generator() = default;
 
-    virtual QVector<float> generate(QString data) = 0;
+    virtual const QVector<float> generate(const QString& data) = 0;
 
-    virtual QString generateText(
-            QString systemPrompt,
-            QString prompt,
+    virtual const QString generateText(
+            QString& systemPrompt,
+            QString& prompt,
             bool isStream
     ) = 0;
 
-    virtual bool isValid() = 0;
+    virtual const bool isValid() = 0;
 
 protected:
     Generator(ConfigGenerator) {}

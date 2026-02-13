@@ -11,8 +11,9 @@ class ParserJSON : public Parser
 public:
     ParserJSON();
 
-    QString extractTextFromJson(const QJsonValue &value) override;
-    void extractTextRecursive(const QJsonValue &value, QStringList &texts) override;
+    const QString extractText(const QByteArray &value) override;
+private:
+    void extractTextRecursive(const QJsonValue &value, QStringList &texts);
 
 };
 #endif // PARSERJSON_H

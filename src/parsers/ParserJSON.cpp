@@ -7,10 +7,10 @@ ParserJSON::ParserJSON()
 }
 
 //--------------------------------------------------------------------------------
-QString ParserJSON::extractTextFromJson(const QJsonValue &value) 
+const QString ParserJSON::extractText(const QByteArray &value) 
 {
     QStringList texts;
-    extractTextRecursive(value, texts);
+    extractTextRecursive(QJsonValue::fromVariant(value), texts);
     qDebug().noquote() << "ParserJSON::extractTextFromJson" << texts.join("\n");
     return texts.join(" ");
 };

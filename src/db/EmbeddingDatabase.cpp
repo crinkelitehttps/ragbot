@@ -9,7 +9,7 @@
 #include "EmbeddingDatabase.h"
 
 //--------------------------------------------------------------------------------
-void EmbeddingDatabase::initialize(QString dbName)
+void EmbeddingDatabase::initialize(const QString& dbName)
 {
     qDebug() << "EmbeddingDatabase::EmbeddingDatabase() dbName " << dbName;
 
@@ -68,7 +68,7 @@ void EmbeddingDatabase::initialize(QString dbName)
 
 
 //--------------------------------------------------------------------------------
-QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
+const QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
         const QVector<float> &queryEmbedding,
         int topK
     )
@@ -128,72 +128,41 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
 
 
 //--------------------------------------------------------------------------------
-int EmbeddingDatabase::count()
-{
-    qDebug() << "EmbeddingDatabase::count()";
-    QSqlQuery query("SELECT COUNT(*) FROM embeddings", m_db);
-    if (query.next()) {
-        return query.value(0).toInt();
-    }
-    return 0;
-};
-
-
-//--------------------------------------------------------------------------------
-bool EmbeddingDatabase::saveEmbedding(
-        const QString &sourceFile,
-        const QString &itemId,
-        const QString &content,
-        const QVector<float> &embedding
+const bool EmbeddingDatabase::createSourceRecord(
+        const QString &sourceFile
     ) 
 {
     QSqlQuery query(m_db);
 
     query.prepare(
-        "INSERT OR REPLACE INTO embeddings " 
-        "(Sha256, source_file, item_id, content, embedding) "
-        "VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO sources"
+        "(Sha256, source_file) "
+        "VALUES (?,?)"
     );
 
     query.addBindValue(fileChecksum(sourceFile));
     query.addBindValue(sourceFile);
-    query.addBindValue(itemId);
-    query.addBindValue(content.left(5000)); // Truncate very long content
-    
-    QByteArray embBlob(
-            reinterpret_cast<const char*>(embedding.data()), 
-            embedding.size() * sizeof(float)
-    );
 
-    query.addBindValue(embBlob);
-    
-    if (!query.exec()) {
-        qWarning() << "Failed to save embedding:" << query.lastError().text();
-        return false;
-    }
+    if(query.exec()) {
+        qDebug() << "EmbeddingDatase::saveEmbedding() [ new file ]";
+        return true;
+    };
+    return false;
+};
+
+
+//--------------------------------------------------------------------------------
+const bool EmbeddingDatabase::saveEmebeding(const QVector<float>& embedding) 
+{
     return true;
 };
 
 
 //--------------------------------------------------------------------------------
-bool EmbeddingDatabase::isEmbedded(const QString& fileName)
-{
-    const auto fileHash = fileChecksum(fileName);
-    QSqlQuery query(m_db);
-
-    query.prepare("SELECT 1 FROM embeddings WHERE Sha256 = :hash");
-    query.bindValue(":hash", fileHash);
-    query.exec();
-    qDebug()  << query.isSelect() << query.first();
-    return query.nextResult();
-}
-
-
-//--------------------------------------------------------------------------------
-QByteArray EmbeddingDatabase::fileChecksum(const QString &fileName) {
+const QByteArray EmbeddingDatabase::fileChecksum(const QString &fileName) {
     QFile f(fileName);
     if (f.open(QFile::ReadOnly)) {
-        QCryptographicHash hash(QCryptographicHash::Algorithm::Sha256);
+        QCryptographicHash hash(QCryptographicHash::Algorithm::Md5);
         if (hash.addData(&f)) {
             return hash.result().toHex();
         }
@@ -203,11 +172,11 @@ QByteArray EmbeddingDatabase::fileChecksum(const QString &fileName) {
 
 
 //--------------------------------------------------------------------------------
-float EmbeddingDatabase::cosineSimilarity(
+const float EmbeddingDatabase::cosineSimilarity(
         const QVector<float> &a,
         const float *b,
         int size
-)
+    )
 {
 // TODO move to Embedder
     float dotProduct = 0.0f;

@@ -8,12 +8,6 @@
 class EmbeddingDatabase
 {
 public:
-    EmbeddingDatabase(const QString &dbName = "embeddings.db") 
-        : m_db()
-    {
-        initialize(dbName);
-    };
- 
     struct SearchResult {
         QString content;
         QString sourceFile;
@@ -21,27 +15,28 @@ public:
         float similarity;
     };
 
-    float cosineSimilarity(const QVector<float> &a, const float *b, int size);
-    QByteArray fileChecksum(const QString& filename); 
+    EmbeddingDatabase(const QString &dbName = "embeddings.db") 
+        : m_db()
+    {
+        initialize(dbName);
+    };
+ 
+    const bool createSourceRecord(const QString& sourcePath);
+    const bool saveEmebedding(const QVector<float>& embeddings);
 
-    bool isEmbedded(const QString& fileName);
-    int count();
-
-    QVector<SearchResult> search(
-            const QVector<float> &queryEmbedding,
-            int topK = 10
-    );
-
-    bool saveEmbedding(
-            const QString &sourceFile,
-            const QString &itemId, 
-            const QString &content,
-            const QVector<float> &embedding
+    const QVector<SearchResult> search(
+        const QVector<float> &queryEmbedding,
+        const int topK = 10
     );
 
 private:
-    void initialize(QString dbName);
+    const float cosineSimilarity(const QVector<float> &a, const float *b, int size);
+    const QByteArray fileChecksum(const QString& filename); 
+    void initialize(const QString& dbName);
+
+private:
     QSqlDatabase m_db;
+
 };
 
 #endif // EMBEDDINGDATABASE_H

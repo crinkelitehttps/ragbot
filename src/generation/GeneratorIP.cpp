@@ -13,7 +13,7 @@ GeneratorIP::GeneratorIP(ConfigGenerator generatorConfig)
 
 
 //--------------------------------------------------------------------------------
-QVector<float> GeneratorIP::generate(QString data) 
+const QVector<float> GeneratorIP::generate(const QString& data) 
 {
     QJsonObject request;
     request["input"] = data;
@@ -85,7 +85,11 @@ QVector<float> GeneratorIP::generate(QString data)
 
 
 //--------------------------------------------------------------------------------
-QString GeneratorIP::generateText(QString systemPrompt, QString prompt, bool isStream) 
+const QString GeneratorIP::generateText(
+    QString& systemPrompt,
+    QString& prompt,
+    bool isStream
+    ) 
 {
     QJsonObject request;
     request["model"] = m_config.modelName;

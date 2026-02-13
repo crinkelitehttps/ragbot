@@ -15,7 +15,7 @@
 //--------------------------------------------------------------------------------
 Embedder::Embedder(ConfigEmbed config)
     : m_config(config)
-    , m_embed_db("embeddings.db")
+    , m_embedDB("embeddings.db")
     , m_generator(initGenerator())
     , m_parser(new ParserJSON())
 {
@@ -70,16 +70,8 @@ void Embedder::processAllFiles()
             .arg(total)
             .arg(fileInfo.fileName());
         
-        if (m_embed_db.isEmbedded(filePath)) {
-            qDebug() << "Embedder::embedFile(): isEmbedded" << true;
-            return;
-        } else {
-            qDebug() << "Embedder::embedFile(): isEmedded" << false;
-        };
 
-        if (!embedFile(filePath)) {
-            qWarning() << "Embedder::processAllFiles(): Failed:" << filePath;
-        }
+        embedFile(filePath);
     }
     
     qDebug() << "Embedder::processAllFiles(): Complete! Processed" 
@@ -110,6 +102,7 @@ Generator* Embedder::initGenerator()
         return generator;
     }
     qDebug() << "Embedder::initGenerator() [ nullptr ]";
+
     return static_cast<Generator*>(nullptr);
 }; 
 
@@ -119,14 +112,16 @@ bool Embedder::embedFile(const QString &sourcePath)
 {
     qDebug() << "Embedder::embedFile()" << sourcePath;
     
-    if (m_embed_db.isEmbedded(sourcePath)){
-        qDebug() << "Embedder::updateOrCreate() " << sourcePath;
-        return true;
-    }
-
     QFile file(sourcePath);
     if (!file.open(QIODevice::ReadOnly)) return false;
+
+    if (m_embedDB.createSourceRecord(sourcePath)) {
+        qDebug() << "Embedder::updateOrCreate() " << sourcePath;
+        m_embedDB.saveEmbedding(m_generator->generate(sourcePath));
+    }
+
     
+#if 0
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     file.close();
     
@@ -143,7 +138,7 @@ bool Embedder::embedFile(const QString &sourcePath)
                 itemId = item.toObject()["id"].toString();
             }
             
-            QString text = m_parser->extractTextFromJson(item);  // No keys parameter
+            QString text = m_parser->extractText();  // No keys parameter
             if (text.isEmpty()) text = "empty";
             
             if (updateOrCreate(text, sourcePath, itemId)) {
@@ -154,10 +149,11 @@ bool Embedder::embedFile(const QString &sourcePath)
         qDebug() << "  Saved" << success << "items";
         return success > 0;
     } else {
-        QString text = m_parser->extractTextFromJson(doc.object());  // No keys parameter
+        QString text = m_parser->extractText(doc.object());  // No keys parameter
         if (text.isEmpty()) text = "empty";
         return updateOrCreate(text, sourcePath, "");
     }
+#endif
 };
 
 
@@ -173,7 +169,7 @@ bool Embedder::updateOrCreate (
     if (embedding.isEmpty()) {
         return false;
     }
-    return m_embed_db.saveEmbedding(sourcePath, itemId, text, embedding);
+    return m_embedDB.createSourceRecord();
 };
 
 
