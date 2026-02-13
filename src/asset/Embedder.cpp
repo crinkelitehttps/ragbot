@@ -7,6 +7,7 @@
 #include <QEventLoop>
 #include <QTimer>
 #include "Embedder.h"
+#include "../parsers/ParserJSON.h"
 #include "../generation/GeneratorImmediate.h"
 #include "../generation/GeneratorIP.h"
 
@@ -16,6 +17,7 @@ Embedder::Embedder(ConfigEmbed config)
     : m_config(config)
     , m_embed_db("embeddings.db")
     , m_generator(initGenerator())
+    , m_parser(new ParserJSON())
 {
     qDebug() << "Embedder::Embedder()";
 
@@ -31,56 +33,61 @@ Embedder::Embedder(ConfigEmbed config)
 void Embedder::processAllFiles()
 {
     qDebug() << "Embedder::processAllFiles()";
-    {
-        int total = 0, processed = 0;
+    int total = 0, processed = 0;
 
-        const auto jsonDir = "/home/joe/source/Cataclysm-DDA/data/json";
-        
-        QDirIterator countIt(
-                jsonDir,
-                QStringList()
-                << "*.json",
-                QDir::Files,
-                QDirIterator::Subdirectories
-        );
+    const auto jsonDir = "/home/joe/source/Cataclysm-DDA/data/json";
+    
+    QDirIterator countIt(
+            jsonDir,
+            QStringList()
+            << "*.json",
+            QDir::Files,
+            QDirIterator::Subdirectories
+    );
 
-        while (countIt.hasNext()) {
-            countIt.next();
-            total++;
-        }
-        
-        qDebug() << "Embedder::processAllFiles(): Found" << total << "JSON files";
-        
-        QDirIterator it(
-                jsonDir,
-                QStringList()
-                << "*.json",
-                QDir::Files,
-                QDirIterator::Subdirectories
-        );
-        
-// TODO check file hash here
-        while (it.hasNext()) {
-            QString filePath = it.next();
-            QFileInfo fileInfo(filePath);
-            
-            processed++;
-
-            qDebug() << QString("[%1/%2] %3").arg(processed)
-                .arg(total)
-                .arg(fileInfo.fileName());
-            
-            if (!embedFile(filePath)) {
-                qWarning() << "Embedder::processAllFiles(): Failed:" << filePath;
-            }
-        }
-        
-        qDebug() << "Embedder::processAllFiles(): Complete! Processed" 
-            << processed
-            << "files";
+    while (countIt.hasNext()) {
+        countIt.next();
+        total++;
     }
+    
+    qDebug() << "Embedder::processAllFiles(): Found" << total << "JSON files";
+    
+    QDirIterator it(
+            jsonDir,
+            QStringList()
+            << "*.json",
+            QDir::Files,
+            QDirIterator::Subdirectories
+    );
+    
+    while (it.hasNext()) {
+        QString filePath = it.next();
+        QFileInfo fileInfo(filePath);
+        
+        processed++;
+
+        qDebug() << QString("[%1/%2] %3").arg(processed)
+            .arg(total)
+            .arg(fileInfo.fileName());
+        
+        if (m_embed_db.isEmbedded(filePath)) {
+            qDebug() << "Embedder::embedFile(): isEmbedded" << true;
+            return;
+        } else {
+            qDebug() << "Embedder::embedFile(): isEmedded" << false;
+        };
+
+        if (!embedFile(filePath)) {
+            qWarning() << "Embedder::processAllFiles(): Failed:" << filePath;
+        }
+    }
+    
+    qDebug() << "Embedder::processAllFiles(): Complete! Processed" 
+        << processed
+        << "files";
 
 };
+
 
 
 //--------------------------------------------------------------------------------
@@ -107,26 +114,25 @@ Generator* Embedder::initGenerator()
 }; 
 
 
+
 //--------------------------------------------------------------------------------
-bool Embedder::embedAndSave(
-        const QString &text,
-        const QString &sourcePath,
-        const QString &itemId
-    ) 
+Parser* Embedder::initParser()
 {
-    QVector<float> embedding = generateEmbedding(text);
-    if (embedding.isEmpty()) {
-        return false;
+    return static_cast<ParserJSON*>(new ParserJSON());
+}; 
+
+
+//--------------------------------------------------------------------------------
+bool Embedder::embedFile(const QString &sourcePath) 
+{
+    qDebug() << "Embedder::embedFile()" << sourcePath;
+    
+    if (m_embed_db.isEmbedded(sourcePath)){
+        qDebug() << "Embedder::updateOrCreate() " << sourcePath;
+        return true;
     }
-    return m_embed_db.saveEmbedding(sourcePath, itemId, text, embedding);
-};
 
-
-//--------------------------------------------------------------------------------
-bool Embedder::embedFile(const QString &inputPath) 
-{
-    qDebug() << "Embedder::embedFile()" << inputPath;
-    QFile file(inputPath);
+    QFile file(sourcePath);
     if (!file.open(QIODevice::ReadOnly)) return false;
     
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -134,13 +140,9 @@ bool Embedder::embedFile(const QString &inputPath)
     
     if (doc.isNull()) return false;
     
-    QStringList keys = {"name", "description", "id", "type", "species", "flags",
-                       "messages", "text", "category", "title", "str", "str_sp"};
-    
     if (doc.isArray()) {
         QJsonArray arr = doc.array();
         std::atomic<int> success = 0;
-
         for (int i = 0; i < arr.size(); i++) {
             QJsonValue item = arr[i];
             QString itemId = "item_" + QString::number(i);
@@ -149,10 +151,10 @@ bool Embedder::embedFile(const QString &inputPath)
                 itemId = item.toObject()["id"].toString();
             }
             
-            QString text = extractTextFromJson(item, keys);
+            QString text = m_parser->extractTextFromJson(item);  // No keys parameter
             if (text.isEmpty()) text = "empty";
             
-            if (embedAndSave(text, inputPath, itemId)) {
+            if (updateOrCreate(text, sourcePath, itemId)) {
                 success++;
             }
         }
@@ -160,87 +162,26 @@ bool Embedder::embedFile(const QString &inputPath)
         qDebug() << "  Saved" << success << "items";
         return success > 0;
     } else {
-        QString text = extractTextFromJson(doc.object(), keys);
+        QString text = m_parser->extractTextFromJson(doc.object());  // No keys parameter
         if (text.isEmpty()) text = "empty";
-        return embedAndSave(text, inputPath, "");
+        return updateOrCreate(text, sourcePath, "");
     }
-
 };
 
 
 //--------------------------------------------------------------------------------
-QString Embedder::extractTextFromJson(
-        const QJsonValue &value,
-        const QStringList &keys
+bool Embedder::updateOrCreate (
+        const QString &text,
+        const QString &sourcePath,
+        const QString &itemId
     ) 
 {
-    //qDebug() << "Embedder::extractTextFromJson()";
-    QStringList texts;
-    extractTextRecursive(value, keys, texts);
-    return texts.join(" ");
+
+    QVector<float> embedding = m_generator->generate(text);
+    if (embedding.isEmpty()) {
+        return false;
+    }
+    return m_embed_db.saveEmbedding(sourcePath, itemId, text, embedding);
 };
 
-
-//--------------------------------------------------------------------------------
-void Embedder::extractTextRecursive(
-        const QJsonValue &value,
-        const QStringList &keys,
-        QStringList &texts
-    )
-{
-    if (value.isObject()) {
-        QJsonObject obj = value.toObject();
-        for (auto it = obj.begin(); it != obj.end(); ++it) {
-            QString key = it.key();
-            QJsonValue val = it.value();
-            
-            if (keys.contains(key)) {
-                if (val.isString()) {
-                    texts.append(val.toString());
-                } else if (val.isDouble()) {
-                    texts.append(QString::number(val.toDouble()));
-                } else if (val.isObject()) {
-                    QJsonObject nested = val.toObject();
-                    if (nested.contains("str")) {
-                        texts.append(nested["str"].toString());
-                    }
-                } else if (val.isArray()) {
-                    for (const auto &item : val.toArray()) {
-                        if (item.isString()) {
-                            texts.append(item.toString());
-                        }
-                    }
-                }
-            }
-            
-            if (val.isObject() || val.isArray()) {
-                extractTextRecursive(val, keys, texts);
-            }
-        }
-    } else if (value.isArray()) {
-        for (const auto &item : value.toArray()) {
-            extractTextRecursive(item, keys, texts);
-        }
-    }
-};
-
-
-//--------------------------------------------------------------------------------
-QVector<float> Embedder::generateEmbedding(QString input) 
-{
-    QJsonObject request;
-    request["input"] = input;
-
-    QJsonDocument doc(request);
-    if (doc.isEmpty()) {
-        qWarning() << "Embedder::generateEmbedding() doc.isEmpty()";
-    }
-
-    QByteArray jsonData = doc.toJson();
-    if (jsonData.isEmpty()) {
-        qWarning() << "Embedder::generateEmbedding() jsonData.isEmpty()";
-    }
-
-    return m_generator->generate(doc.toJson());
-};
 

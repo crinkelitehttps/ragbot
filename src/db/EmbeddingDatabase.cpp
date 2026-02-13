@@ -18,23 +18,45 @@ void EmbeddingDatabase::initialize(QString dbName)
     m_db.open();
 
     QSqlQuery query(m_db);
-    
-    // TODO add cryptographic has as primary key;
 
-    QString createTable = R"(
-        CREATE TABLE IF NOT EXISTS embeddings (
-            Sha256 TEXT PRIMARY KEY NOT NULL,
-            source_file TEXT NOT NULL,
+    QString createSources = R"(
+        CREATE TABLE sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        Sha256 TEXT UNIQUE NOT NULL,
+        source_file TEXT NOT NULL,
+        helper_context TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+    )";
+
+    if (!query.exec(createSources)) {
+        qCritical()
+            << "EmbeddingDatase::EmbeddingDatabase(): Failed to create sources table:"
+            << query.lastError().text();
+    }
+
+    query.exec(
+        "CREATE INDEX IF NOT EXISTS idx_source ON embeddings(source_file)"
+    );
+    if (!m_db.open()) {
+        qCritical() << "Failed to open embeddings database:"
+           << m_db.lastError().text();
+    }
+
+    // TODO add cryptographic has as primary key;
+    QString createEmbeddings = R"(
+        CREATE TABLE embeddings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_id TEXT,
             content TEXT NOT NULL,
-            embedding BLOB NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            helper_context TEXT,
+            source_id INTEGER NOT NULL,
+            FOREIGN KEY (source_id) REFERENCES sources (id)
         )
     )";
     
-    if (!query.exec(createTable)) {
+    if (!query.exec(createEmbeddings)) {
         qCritical()
-            << "EmbeddingDatase::EmbeddingDatabase(): Failed to create table:"
+            << "EmbeddingDatase::EmbeddingDatabase(): Failed to create embedding table:"
             << query.lastError().text();
     }
         
@@ -42,10 +64,6 @@ void EmbeddingDatabase::initialize(QString dbName)
         "CREATE INDEX IF NOT EXISTS idx_source ON embeddings(source_file)"
     );
     
-    if (!m_db.open()) {
-        qCritical() << "Failed to open embeddings database:"
-           << m_db.lastError().text();
-    }
 }
 
 
@@ -55,7 +73,6 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
         int topK
     )
 {
-    // TODO move this to Embedder
     qDebug() << "EmbeddingDatabase::search():" << queryEmbedding.count() << topK;
 
     QSqlQuery query(m_db);
@@ -130,13 +147,6 @@ bool EmbeddingDatabase::saveEmbedding(
         const QVector<float> &embedding
     ) 
 {
-    if (isEmbedded(sourceFile)) {
-        qDebug() << "skipping";
-        return true;
-    } else {
-        qDebug() << "new record";
-    };
-
     QSqlQuery query(m_db);
 
     query.prepare(
@@ -175,7 +185,6 @@ bool EmbeddingDatabase::isEmbedded(const QString& fileName)
     query.bindValue(":hash", fileHash);
     query.exec();
     qDebug()  << query.isSelect() << query.first();
-    
     return query.nextResult();
 }
 
@@ -186,7 +195,7 @@ QByteArray EmbeddingDatabase::fileChecksum(const QString &fileName) {
     if (f.open(QFile::ReadOnly)) {
         QCryptographicHash hash(QCryptographicHash::Algorithm::Sha256);
         if (hash.addData(&f)) {
-            return hash.result();
+            return hash.result().toHex();
         }
     }
     return QByteArray();

@@ -47,7 +47,7 @@ void RAGBot::startChatLoop()
 void RAGBot::processQuestion(const QString &question)
 {
     qDebug() << "RAGBot::processQuestion(): " << question;
-#if 1
+#if 0
     
     QVector<float> queryEmb = m_embedder.generateEmbedding(question);
     if (queryEmb.isEmpty()) {

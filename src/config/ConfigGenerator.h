@@ -12,9 +12,9 @@ struct ConfigGenerator {
     bool isImmediate {};
     bool isValid() 
     { 
-        return dbName.isEmpty()
+        return !dbName.isEmpty()
             && !basePath.isEmpty()
-            && modelName.isEmpty();
+            && !modelName.isEmpty();
     }
 };
 

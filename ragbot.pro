@@ -13,7 +13,8 @@ SOURCES += \
     src/db/EmbeddingDatabase.cpp \
     src/db/RoleplayDatabase.cpp \
     src/generation/GeneratorImmediate.cpp \
-    src/generation/GeneratorIP.cpp
+    src/generation/GeneratorIP.cpp \
+    src/parser/ParserJSON.cpp
 
 # Header files
 HEADERS += \
@@ -29,7 +30,9 @@ HEADERS += \
     src/db/RoleplayDatabase.h \
     src/generation/Generator.h \
     src/generation/GeneratorImmediate.h \
-    src/generation/GeneratorIP.h
+    src/generation/GeneratorIP.h \
+    src/parser/Parser.h \
+    src/parser/ParserJSON.h
 
 # Include paths
 # Force Qt from home directory, NOT system repos

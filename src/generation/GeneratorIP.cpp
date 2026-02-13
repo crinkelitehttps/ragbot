@@ -15,6 +15,17 @@ GeneratorIP::GeneratorIP(ConfigGenerator generatorConfig)
 //--------------------------------------------------------------------------------
 QVector<float> GeneratorIP::generate(QString data) 
 {
+    QJsonObject request;
+    request["input"] = data;
+    QJsonDocument doc(request);
+    if (doc.isEmpty()) {
+        qWarning() << "Embedder::generateEmbedding() doc.isEmpty()";
+    }
+    QByteArray jsonData = doc.toJson();
+    if (jsonData.isEmpty()) {
+        qWarning() << "Embedder::generateEmbedding() jsonData.isEmpty()";
+    }
+
     QNetworkRequest netRequest;
     netRequest.setUrl(QUrl(m_config.basePath+ "v1/embeddings"));
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");

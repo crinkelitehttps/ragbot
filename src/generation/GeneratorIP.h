@@ -24,10 +24,19 @@ public:
     GeneratorIP(ConfigGenerator generatorConfig);
 
     QVector<float> generate(QString data) override;
-    QString generateText(QString systemMessage, QString question, bool isStream) override;
-    //bool isValid() override { return m_config.isValid(); };
+
+    QString generateText(
+            QString systemMessage,
+            QString question,
+            bool isStream
+    ) override;
+
     bool isValid() override { return true; };
 
+#if 0
+    bool isValid() override { return m_config.isValid(); };
+#endif
+    
 private:
 
     ConfigGenerator m_config;
