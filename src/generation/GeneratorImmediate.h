@@ -19,10 +19,12 @@ class GeneratorImmediate : public virtual Generator
 public:
     GeneratorImmediate(ConfigGenerator generatorConfig);
 
-    // TODO isImmediate
-    const bool isValid() override { return m_config.isValid() && m_config.isImmediate; };
-    const QVector<float> generate(const QString& data) override;
-    const QString generateText(QString& systemMessage, QString& prompt, bool isStream) override;
+    bool isValid() override { return m_config.isValid() && m_config.isImmediate; };
+    Generator::ContentEmbedding generate(const QString& data) override;
+    QString generateText(
+            QString& systemMessage,
+            QString& prompt,
+            bool isStream) override;
     
     ConfigGenerator m_config;
     llama_context *m_embedCtx;

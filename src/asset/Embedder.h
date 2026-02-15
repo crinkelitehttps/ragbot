@@ -17,7 +17,7 @@ public:
     }
 
     void processAllFiles();
-    bool embedFile(const QString &sourcePath);
+    void embedFile(const QString& sourcePath);
 
     Generator* initGenerator();
 

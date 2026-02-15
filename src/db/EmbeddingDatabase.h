@@ -4,10 +4,12 @@
 #include <QString>
 #include <QVector>
 #include <QSqlDatabase>
+#include "../generation/Generator.h"
 
 class EmbeddingDatabase
 {
 public:
+
     struct SearchResult {
         QString content;
         QString sourceFile;
@@ -21,17 +23,17 @@ public:
         initialize(dbName);
     };
  
-    const bool createSourceRecord(const QString& sourcePath);
-    const bool saveEmebedding(const QVector<float>& embeddings);
+    bool createSourceRecord(const QString& sourcePath);
+    bool saveEmbedding(const Generator::ContentEmbedding& ContentEmbedding);
 
-    const QVector<SearchResult> search(
+    QVector<SearchResult> search(
         const QVector<float> &queryEmbedding,
         const int topK = 10
     );
 
 private:
-    const float cosineSimilarity(const QVector<float> &a, const float *b, int size);
-    const QByteArray fileChecksum(const QString& filename); 
+    float cosineSimilarity(const QVector<float> &a, const float *b, int size);
+    QByteArray fileChecksum(const QString& filename); 
     void initialize(const QString& dbName);
 
 private:

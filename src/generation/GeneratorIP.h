@@ -23,20 +23,16 @@ class GeneratorIP : public virtual Generator
 public:
     GeneratorIP(ConfigGenerator generatorConfig);
 
-    const QVector<float> generate(const QString& data) override;
+    ContentEmbedding generate(const QString& data) override;
 
-    const QString generateText(
+    QString generateText(
             QString& systemPrompt,
             QString& prompt,
             bool isStream
     ) override;
 
-    const bool isValid() override { return true; };
+    bool isValid() override { return true; };
 
-#if 0
-    bool isValid() override { return m_config.isValid(); };
-#endif
-    
 private:
 
     ConfigGenerator m_config;

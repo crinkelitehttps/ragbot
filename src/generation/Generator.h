@@ -1,5 +1,6 @@
 #ifndef GENERATOR_H
 #define GENERATOR_H
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -8,17 +9,23 @@
 class Generator 
 {
 public:
+    struct ContentEmbedding {
+        QString sourceFile;
+        QString content;
+        QVector<float> embedding;
+    };
+
     virtual ~Generator() = default;
 
-    virtual const QVector<float> generate(const QString& data) = 0;
+    virtual ContentEmbedding generate(const QString& data) = 0;
 
-    virtual const QString generateText(
+    virtual QString generateText(
             QString& systemPrompt,
             QString& prompt,
             bool isStream
     ) = 0;
 
-    virtual const bool isValid() = 0;
+    virtual bool isValid() = 0;
 
 protected:
     Generator(ConfigGenerator) {}

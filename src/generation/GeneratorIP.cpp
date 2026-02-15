@@ -1,5 +1,6 @@
 #include <QTimer>
 #include <QEventLoop>
+#include <QFile>
 #include <QNetworkReply>
 #include "GeneratorIP.h"
 
@@ -13,14 +14,16 @@ GeneratorIP::GeneratorIP(ConfigGenerator generatorConfig)
 
 
 //--------------------------------------------------------------------------------
-const QVector<float> GeneratorIP::generate(const QString& data) 
+Generator::ContentEmbedding GeneratorIP::generate(const QString& data) 
 {
     QJsonObject request;
     request["input"] = data;
+
     QJsonDocument doc(request);
     if (doc.isEmpty()) {
         qWarning() << "GeneratorIP::generate() doc.isEmpty()";
     }
+
     QByteArray jsonData = doc.toJson();
     if (jsonData.isEmpty()) {
         qWarning() << "GeneratorIP::generate() jsonData.isEmpty()";
@@ -31,9 +34,12 @@ const QVector<float> GeneratorIP::generate(const QString& data)
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     netRequest.setTransferTimeout(m_config.timeout);
 
-    qDebug().noquote() << "GeneratorIP::generate()" << data;
+    QNetworkReply *reply = m_network.post(
+            netRequest,
+            QString(QJsonDocument(request).toJson(QJsonDocument::Compact)
+        ).toUtf8()
+    );
 
-    QNetworkReply *reply = m_network.post(netRequest, QString(QJsonDocument(request).toJson(QJsonDocument::Compact)).toUtf8());
     QEventLoop loop;
 
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
@@ -80,12 +86,16 @@ const QVector<float> GeneratorIP::generate(const QString& data)
         qWarning() << "GeneratorIP::generate(): Request timed out";
     }
 
-    return embedding;
+    ContentEmbedding contentEmbedding;
+    contentEmbedding.embedding = embedding;
+    contentEmbedding.content = data;
+
+    return contentEmbedding;
 };
 
 
 //--------------------------------------------------------------------------------
-const QString GeneratorIP::generateText(
+QString GeneratorIP::generateText(
     QString& systemPrompt,
     QString& prompt,
     bool isStream

@@ -81,7 +81,6 @@ void Embedder::processAllFiles()
 };
 
 
-
 //--------------------------------------------------------------------------------
 Generator* Embedder::initGenerator()
 {
@@ -108,68 +107,31 @@ Generator* Embedder::initGenerator()
 
 
 //--------------------------------------------------------------------------------
-bool Embedder::embedFile(const QString &sourcePath) 
+void Embedder::embedFile(const QString &sourcePath) 
 {
     qDebug() << "Embedder::embedFile()" << sourcePath;
     
     QFile file(sourcePath);
-    if (!file.open(QIODevice::ReadOnly)) return false;
+
+    if (!file.open(QIODevice::ReadOnly)) { 
+        qWarning() << "Embedder::embedFile() [ could not read file ]" << sourcePath;
+    };
 
     if (m_embedDB.createSourceRecord(sourcePath)) {
-        qDebug() << "Embedder::updateOrCreate() " << sourcePath;
-        m_embedDB.saveEmbedding(m_generator->generate(sourcePath));
-    }
+        qDebug() << "Embedder::embedFile() created " << sourcePath;
+        QFile sourceFile(sourcePath);
 
-    
-#if 0
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    file.close();
-    
-    if (doc.isNull()) return false;
-    
-    if (doc.isArray()) {
-        QJsonArray arr = doc.array();
-        std::atomic<int> success = 0;
-        for (int i = 0; i < arr.size(); i++) {
-            QJsonValue item = arr[i];
-            QString itemId = "item_" + QString::number(i);
-            
-            if (item.isObject() && item.toObject().contains("id")) {
-                itemId = item.toObject()["id"].toString();
-            }
-            
-            QString text = m_parser->extractText();  // No keys parameter
-            if (text.isEmpty()) text = "empty";
-            
-            if (updateOrCreate(text, sourcePath, itemId)) {
-                success++;
-            }
-        }
-        
-        qDebug() << "  Saved" << success << "items";
-        return success > 0;
+        if (sourceFile.open(QIODevice::ReadOnly)) {
+            const auto embedding = m_generator->generate(sourceFile.readAll());
+            if(m_embedDB.saveEmbedding(embedding)) {
+                qDebug() << "Embedder::embedderFile() [ saveEmbeeding returned true ]";
+            };
+            qWarning() << "Embedder::embedderFile() [ saveEmbeeding returned false ]";
+        };
+
     } else {
-        QString text = m_parser->extractText(doc.object());  // No keys parameter
-        if (text.isEmpty()) text = "empty";
-        return updateOrCreate(text, sourcePath, "");
-    }
-#endif
+        qDebug() << "Emedder::embedFile() [ embedding likely exists ]";
+    };
+
 };
-
-
-//--------------------------------------------------------------------------------
-bool Embedder::updateOrCreate (
-        const QString &text,
-        const QString &sourcePath,
-        const QString &itemId
-    ) 
-{
-
-    QVector<float> embedding = m_generator->generate(text);
-    if (embedding.isEmpty()) {
-        return false;
-    }
-    return m_embedDB.createSourceRecord();
-};
-
 
