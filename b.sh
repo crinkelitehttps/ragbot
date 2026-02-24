@@ -1,0 +1,7 @@
+echo "running qmake"
+qmake ../ragbot
+
+echo "running make"
+make -j$(nproc)
+
+cp ../ragbot/conversations.db ./
