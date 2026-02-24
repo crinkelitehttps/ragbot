@@ -90,7 +90,7 @@ QVector<float> GeneratorImmediate::generate(const QString& data)
     }
     
     llama_batch_free(batch);
-    return QVector<float>();
+    return result;
 };
 
 

@@ -88,12 +88,9 @@ QVector<float> GeneratorIP::generate(const QString& data)
         qWarning() << "GeneratorIP::generate(): Request timed out";
     }
 
-    const QVector<float> emedding;
-
-    // this may have a size 
-    if (!sizeof(embedding)) {
+    if (embedding.isEmpty()) {
         qWarning() << "GeneratorIP::generate() no embedding data";
-    } else if (sizeof(data) > 8000) {
+    } else if (data.size() > 8000) {
         qWarning() << "GeneratorIP::generate() embedding is possibly too large";
     };
 

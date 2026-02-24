@@ -25,7 +25,11 @@ public:
  
     bool isEmbedded(const QString& sourceFile);
 
-    bool saveEmbedding(const QVector<float> embedding, const QString& ContentEmbedding);
+    bool saveEmbedding(
+        const QVector<float> &embedding,
+        const QString &sourcePath,
+        const QString &helperContext
+    );
 
     QVector<SearchResult> search(
         const QVector<float> &queryEmbedding,

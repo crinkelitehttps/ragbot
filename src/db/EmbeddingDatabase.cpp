@@ -25,7 +25,7 @@ void EmbeddingDatabase::initialize(const QString& dbName)
     }
 
     QString createSources = R"(
-        CREATE TABLE sources (
+        CREATE TABLE IF NOT EXISTS sources (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             Sha256 TEXT UNIQUE NOT NULL,
             source_file TEXT NOT NULL,
@@ -41,7 +41,7 @@ void EmbeddingDatabase::initialize(const QString& dbName)
     }
 
     QString createEmbeddings = R"(
-        CREATE TABLE embeddings (
+        CREATE TABLE IF NOT EXISTS embeddings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source_id INTEGER NOT NULL,
             embedding BLOB NOT NULL,
@@ -69,7 +69,9 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
     QSqlQuery query(m_db);
 
     query.prepare(
-        "SELECT content, source_file, item_id, embedding FROM embeddings"
+        "SELECT sources.helper_context, sources.source_file, embeddings.embedding "
+        "FROM embeddings "
+        "JOIN sources ON sources.id = embeddings.source_id"
     );
     
     if (!query.exec()) {
@@ -84,8 +86,7 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
     while (query.next()) {
         QString content = query.value(0).toString();
         QString sourceFile = query.value(1).toString();
-        QString itemId = query.value(2).toString();
-        QByteArray embBlob = query.value(3).toByteArray();
+        QByteArray embBlob = query.value(2).toByteArray();
         
         const float *embData = reinterpret_cast<const float*>(
                 embBlob.constData()
@@ -100,7 +101,7 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
         SearchResult result;
         result.content = content;
         result.sourceFile = sourceFile;
-        result.itemId = itemId;
+        result.itemId = QString();
         result.similarity = similarity;
         results.append(result);
     }
@@ -120,8 +121,9 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
 
 //--------------------------------------------------------------------------------
 bool EmbeddingDatabase::saveEmbedding(
-    const QVector<float> embedding,
-    const QString& sourcePath)
+    const QVector<float> &embedding,
+    const QString &sourcePath,
+    const QString &helperContext)
 {
     const auto fcs = fileChecksum(sourcePath).trimmed();
 
@@ -134,17 +136,18 @@ bool EmbeddingDatabase::saveEmbedding(
         return false;
     }
 
-    if (getSourceId.nextResult()) {
+    if (getSourceId.next()) {
         return true;
     }
 
     QSqlQuery insertSource(m_db);
     insertSource.prepare(
-        "INSERT INTO sources (Sha256, source_file) VALUES (?, ?);"
+        "INSERT INTO sources (Sha256, source_file, helper_context) VALUES (?, ?, ?);"
     );
 
     insertSource.addBindValue(fcs);
     insertSource.addBindValue(sourcePath);
+    insertSource.addBindValue(helperContext);
 
     if (!insertSource.exec()) {
         qWarning() << insertSource.lastError();
@@ -182,7 +185,7 @@ bool EmbeddingDatabase::saveEmbedding(
 QByteArray EmbeddingDatabase::fileChecksum(const QString &fileName) {
     QFile f(fileName);
     if (f.open(QFile::ReadOnly)) {
-        QCryptographicHash hash(QCryptographicHash::Algorithm::Md5);
+        QCryptographicHash hash(QCryptographicHash::Algorithm::Sha256);
         if (hash.addData(&f)) {
             return hash.result().toHex();
         }
@@ -218,11 +221,18 @@ float EmbeddingDatabase::cosineSimilarity(
 bool EmbeddingDatabase::isEmbedded(const QString& sourceFile)
 {
     QSqlQuery check(m_db);
-    check.prepare("SELECT * FROM sources WHERE Sha256 = ?;");
-    check.addBindValue(fileChecksum(sourceFile));
-    check.exec();
-    const auto result = check.nextResult();
+    check.prepare("SELECT COUNT(id) FROM sources WHERE Sha256 = ?;");
+    const auto hash = fileChecksum(sourceFile);
+    check.addBindValue(hash);
+    if (!check.exec()) {
+        qWarning() << "EmbeddingDatabase::isEmbedded(): " << check.lastError();
+        return false;
+    }
+    if (!check.next()) {
+        return false;
+    }
+    const auto count = check.value(0).toInt();
+    const auto result = count > 0;
+    qDebug() << "EmbeddingDatabase::isEmbedded(): " << hash << result;
     return result;
 };
-
-

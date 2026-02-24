@@ -1,6 +1,7 @@
 // Modified to use local llama-swap embedding server
 #include <QDir>
 #include <QDirIterator>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -22,10 +23,13 @@ Embedder::Embedder(ConfigEmbed config)
     qDebug() << "Embedder::Embedder()";
 
 //    QString jsonDir = QDir::homePath() + "/source/Cataclysm-DDA/data/json";
-    QString jsonDir = QDir::homePath() + config.sourceFiles;
+    QString jsonDir = QFileInfo(config.sourceFiles).isAbsolute()
+        ? config.sourceFiles
+        : QDir::homePath() + config.sourceFiles;
     if (!QDir(jsonDir).exists()) {
         qCritical() << "Embedder::Embedder(): JSON directory not found:" << jsonDir;
     }
+    m_config.sourceFiles = jsonDir;
     processAllFiles();
 }
 
@@ -122,7 +126,7 @@ void Embedder::embedFile(const QString &sourcePath)
         qDebug() << "Embedder::embedFile()" << extractedText;
         const auto embedding = m_generator->generate(extractedText);
         sourceFile.close();
-        if(m_embedDB.saveEmbedding(embedding, sourcePath)) {
+        if(m_embedDB.saveEmbedding(embedding, sourcePath, extractedText)) {
             qDebug() << "Embedder::embedderFile() [ saveEmbeeding returned true ]";
             return;
         };
@@ -130,4 +134,3 @@ void Embedder::embedFile(const QString &sourcePath)
     };
 
 };
-
