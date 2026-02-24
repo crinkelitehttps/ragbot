@@ -16,14 +16,13 @@
 #include "llama.h"
 
 
-
 //--------------------------------------------------------------------------------
 class GeneratorIP : public virtual Generator
 {
 public:
     GeneratorIP(ConfigGenerator generatorConfig);
 
-    ContentEmbedding generate(const QString& data) override;
+    QVector<float> generate(const QString data) override;
 
     QString generateText(
             QString& systemPrompt,

@@ -9,7 +9,7 @@ class Parser
 {
 public:
     virtual ~Parser() = default;
-    virtual const QString extractText(const QByteArray &value) = 0;
+    virtual const QString extractText(const QByteArray& value) = 0;
 
 protected:
     Parser() {}

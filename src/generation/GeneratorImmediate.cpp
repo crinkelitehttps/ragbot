@@ -49,7 +49,7 @@ GeneratorImmediate::GeneratorImmediate(ConfigGenerator generatorConfig)
 
 
 //--------------------------------------------------------------------------------
-Generator::ContentEmbedding GeneratorImmediate::generate(const QString& data) 
+QVector<float> GeneratorImmediate::generate(const QString data) 
 {
     auto vt = common_tokenize(m_embedCtx, data.toStdString(), true);
     auto tokens = QVector<llama_token>(vt.begin(), vt.end());
@@ -90,8 +90,7 @@ Generator::ContentEmbedding GeneratorImmediate::generate(const QString& data)
     }
     
     llama_batch_free(batch);
-    ContentEmbedding contentEmbedding;
-    return contentEmbedding;
+    return QVector<float>();
 };
 
 

@@ -14,7 +14,7 @@ GeneratorIP::GeneratorIP(ConfigGenerator generatorConfig)
 
 
 //--------------------------------------------------------------------------------
-Generator::ContentEmbedding GeneratorIP::generate(const QString& data) 
+QVector<float> GeneratorIP::generate(const QString data) 
 {
     QJsonObject request;
     request["input"] = data;
@@ -33,6 +33,8 @@ Generator::ContentEmbedding GeneratorIP::generate(const QString& data)
     netRequest.setUrl(QUrl(m_config.basePath+ "v1/embeddings"));
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     netRequest.setTransferTimeout(m_config.timeout);
+
+    qDebug().noquote() << "GenreatorIP::generate size" << sizeof(data) << data.length();
 
     QNetworkReply *reply = m_network.post(
             netRequest,
@@ -86,11 +88,16 @@ Generator::ContentEmbedding GeneratorIP::generate(const QString& data)
         qWarning() << "GeneratorIP::generate(): Request timed out";
     }
 
-    ContentEmbedding contentEmbedding;
-    contentEmbedding.embedding = embedding;
-    contentEmbedding.content = data;
+    const QVector<float> emedding;
 
-    return contentEmbedding;
+    // this may have a size 
+    if (!sizeof(embedding)) {
+        qWarning() << "GeneratorIP::generate() no embedding data";
+    } else if (sizeof(data) > 8000) {
+        qWarning() << "GeneratorIP::generate() embedding is possibly too large";
+    };
+
+    return embedding;
 };
 
 
@@ -131,9 +138,6 @@ QString GeneratorIP::generateText(
     QNetworkRequest netRequest;
     netRequest.setUrl(QUrl(m_config.basePath+ "/chat/completions"));
 
-    qDebug() << "GeneratorIP::generateText" << m_config.basePath;
-    qDebug() << "GeneratorIP::generateText" << netRequest.url();
- 
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     netRequest.setTransferTimeout(m_config.timeout);
     
@@ -221,6 +225,7 @@ QString GeneratorIP::generateText(
                 }
             }
         } else {
+            Q_ASSERT(reply->errorString().isEmpty());
             qWarning() << "Network error:" << reply->errorString();
         }
     } else {

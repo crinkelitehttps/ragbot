@@ -9,15 +9,9 @@
 class Generator 
 {
 public:
-    struct ContentEmbedding {
-        QString sourceFile;
-        QString content;
-        QVector<float> embedding;
-    };
-
     virtual ~Generator() = default;
 
-    virtual ContentEmbedding generate(const QString& data) = 0;
+    virtual QVector<float> generate(const QString data) = 0;
 
     virtual QString generateText(
             QString& systemPrompt,

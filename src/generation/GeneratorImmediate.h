@@ -20,7 +20,7 @@ public:
     GeneratorImmediate(ConfigGenerator generatorConfig);
 
     bool isValid() override { return m_config.isValid() && m_config.isImmediate; };
-    Generator::ContentEmbedding generate(const QString& data) override;
+    QVector<float> generate(const QString data) override;
     QString generateText(
             QString& systemMessage,
             QString& prompt,

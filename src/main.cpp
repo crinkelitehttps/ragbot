@@ -18,6 +18,7 @@ int main(int argc, char *argv[])
     QCoreApplication app(argc, argv);
     
     QString model;
+    QString embedderInputsPath;
     bool isLocal {};
     bool isEmbedMode {};
 
@@ -26,6 +27,10 @@ int main(int argc, char *argv[])
             i++;
             qDebug() << "Using model" << argv[i];
             model = argv[i];
+        } else if (QString(argv[i]).startsWith("-d") && argv[i+1]){
+            i++;
+            qDebug() << "embedder inputs path" << argv[i];
+            embedderInputsPath = argv[i];
         } else if (QString(argv[i]).startsWith("-l")) {
             qDebug() << "Running in local mode";
             isLocal = true;
@@ -46,6 +51,7 @@ int main(int argc, char *argv[])
 
     ConfigEmbed embedConfig;
     embedConfig.dbName = "embeddings.db";
+    embedConfig.sourceFiles = embedderInputsPath;
     embedConfig.generatorConfig = embedGeneratorConfig;
     
     if(isEmbedMode) {

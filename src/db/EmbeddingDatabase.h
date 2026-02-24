@@ -23,8 +23,9 @@ public:
         initialize(dbName);
     };
  
-    bool createSourceRecord(const QString& sourcePath);
-    bool saveEmbedding(const Generator::ContentEmbedding& ContentEmbedding);
+    bool isEmbedded(const QString& sourceFile);
+
+    bool saveEmbedding(const QVector<float> embedding, const QString& ContentEmbedding);
 
     QVector<SearchResult> search(
         const QVector<float> &queryEmbedding,

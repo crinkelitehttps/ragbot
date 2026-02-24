@@ -21,7 +21,8 @@ Embedder::Embedder(ConfigEmbed config)
 {
     qDebug() << "Embedder::Embedder()";
 
-    QString jsonDir = QDir::homePath() + "/source/Cataclysm-DDA/data/json";
+//    QString jsonDir = QDir::homePath() + "/source/Cataclysm-DDA/data/json";
+    QString jsonDir = QDir::homePath() + config.sourceFiles;
     if (!QDir(jsonDir).exists()) {
         qCritical() << "Embedder::Embedder(): JSON directory not found:" << jsonDir;
     }
@@ -32,13 +33,12 @@ Embedder::Embedder(ConfigEmbed config)
 //--------------------------------------------------------------------------------
 void Embedder::processAllFiles()
 {
-    qDebug() << "Embedder::processAllFiles()";
     int total = 0, processed = 0;
 
-    const auto jsonDir = "/home/joe/source/Cataclysm-DDA/data/json";
+    
     
     QDirIterator countIt(
-            jsonDir,
+            m_config.sourceFiles,
             QStringList()
             << "*.json",
             QDir::Files,
@@ -53,7 +53,7 @@ void Embedder::processAllFiles()
     qDebug() << "Embedder::processAllFiles(): Found" << total << "JSON files";
     
     QDirIterator it(
-            jsonDir,
+            m_config.sourceFiles,
             QStringList()
             << "*.json",
             QDir::Files,
@@ -109,28 +109,24 @@ Generator* Embedder::initGenerator()
 //--------------------------------------------------------------------------------
 void Embedder::embedFile(const QString &sourcePath) 
 {
-    qDebug() << "Embedder::embedFile()" << sourcePath;
-    
-    QFile file(sourcePath);
-
-    if (!file.open(QIODevice::ReadOnly)) { 
-        qWarning() << "Embedder::embedFile() [ could not read file ]" << sourcePath;
+    if (m_embedDB.isEmbedded(sourcePath)) {
+        qDebug() << "Embedder::embedFile() already embedded" << sourcePath;
+        return;
     };
+    
+    QFile sourceFile(sourcePath);
 
-    if (m_embedDB.createSourceRecord(sourcePath)) {
-        qDebug() << "Embedder::embedFile() created " << sourcePath;
-        QFile sourceFile(sourcePath);
-
-        if (sourceFile.open(QIODevice::ReadOnly)) {
-            const auto embedding = m_generator->generate(sourceFile.readAll());
-            if(m_embedDB.saveEmbedding(embedding)) {
-                qDebug() << "Embedder::embedderFile() [ saveEmbeeding returned true ]";
-            };
-            qWarning() << "Embedder::embedderFile() [ saveEmbeeding returned false ]";
+    if (sourceFile.open(QIODevice::ReadOnly)) {
+        const auto fileContents = sourceFile.readAll();
+        const auto extractedText = m_parser->extractText(fileContents);
+        qDebug() << "Embedder::embedFile()" << extractedText;
+        const auto embedding = m_generator->generate(extractedText);
+        sourceFile.close();
+        if(m_embedDB.saveEmbedding(embedding, sourcePath)) {
+            qDebug() << "Embedder::embedderFile() [ saveEmbeeding returned true ]";
+            return;
         };
-
-    } else {
-        qDebug() << "Emedder::embedFile() [ embedding likely exists ]";
+        qWarning() << "Embedder::embedderFile() [ saveEmbeeding returned false ]";
     };
 
 };

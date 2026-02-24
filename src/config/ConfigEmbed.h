@@ -6,6 +6,7 @@
 
 struct ConfigEmbed {
     QString dbName;
+    QString sourceFiles;
     ConfigGenerator generatorConfig;
 
     bool isValid() { return !dbName.isEmpty() && generatorConfig.isValid(); }
