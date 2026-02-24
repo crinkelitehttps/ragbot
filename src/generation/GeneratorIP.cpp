@@ -222,8 +222,8 @@ QString GeneratorIP::generateText(
                 }
             }
         } else {
-            Q_ASSERT(reply->errorString().isEmpty());
             qWarning() << "Network error:" << reply->errorString();
+            Q_ASSERT(reply->errorString().isEmpty());
         }
     } else {
         reply->abort();

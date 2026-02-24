@@ -11,6 +11,7 @@
 #include "asset/Embedder.h"
 #include "asset/Researcher.h"
 #include "asset/Roleplayer.h"
+#include "config/ConfigGenerator.h"
 
 class RAGBot
 {
@@ -30,6 +31,10 @@ private:
     void processQuestion(const QString &question);
 
 private:
+    ConfigEmbed m_embedConfig;
+    ConfigResearch m_researchConfig;
+    ConfigRoleplay m_roleplayConfig;
+
     Embedder m_embedder;
     EmbeddingDatabase m_embed_db;
     

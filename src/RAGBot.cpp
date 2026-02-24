@@ -4,6 +4,8 @@
 #include <QFile>
 
 #include "RAGBot.h"
+#include "generation/GeneratorImmediate.h"
+#include "generation/GeneratorIP.h"
 
 // llama_silenced.h
 
@@ -13,7 +15,10 @@ RAGBot::RAGBot(
         ConfigResearch researchConfig,
         ConfigRoleplay roleplayConfig
     )
-    : m_embedder(embedConfig)
+    : m_embedConfig(embedConfig)
+    , m_researchConfig(researchConfig)
+    , m_roleplayConfig(roleplayConfig)
+    , m_embedder(embedConfig)
     , m_researcher(researchConfig)
     , m_roleplayer(roleplayConfig)
 {
@@ -47,9 +52,45 @@ void RAGBot::startChatLoop()
 void RAGBot::processQuestion(const QString &question)
 {
     qDebug() << "RAGBot::processQuestion(): " << question;
-#if 0
-    
-    QVector<float> queryEmb = m_embedder.generateEmbedding(question);
+
+    const auto buildGenerator = [](ConfigGenerator &config) -> Generator* {
+        auto driverLoaded = [](Generator* generator) {
+            if (generator && generator->isValid()) {
+                return generator;
+            }
+            delete generator;
+            return static_cast<Generator*>(nullptr);
+        };
+        if (config.isImmediate) {
+            if (auto* generator = driverLoaded(new GeneratorImmediate(config))) {
+                qDebug() << "RAGBot::processQuestion() [ GeneratorImmediate ]";
+                return generator;
+            }
+        }
+        if (auto* generator = driverLoaded(new GeneratorIP(config))) {
+            qDebug() << "RAGBot::processQuestion() [ GeneratorIP ]";
+            return generator;
+        }
+        return static_cast<Generator*>(nullptr);
+    };
+
+    const auto truncateTo = [](const QString &text, int maxChars) {
+        if (maxChars <= 0 || text.size() <= maxChars) {
+            return text;
+        }
+        return text.left(maxChars);
+    };
+
+    ConfigGenerator embedGenConfig = m_embedConfig.generatorConfig;
+    Generator *embedGen = buildGenerator(embedGenConfig);
+    if (!embedGen) {
+        qWarning() << "RAGBot::processQuestion(): No valid embedding generator";
+        return;
+    }
+
+    QVector<float> queryEmb = embedGen->generate(question);
+    delete embedGen;
+
     if (queryEmb.isEmpty()) {
         qWarning() << "RAGBot::processQuestion(): Failed to generate query embedding";
         return;
@@ -66,11 +107,17 @@ void RAGBot::processQuestion(const QString &question)
     
     // Build context from top results
     QString context;
+    const int maxContextChars = 8000;
     for (int i = 0; i < results.size(); i++) {
-        context += QString("RAGBot::processQuestion(): Document %1 (similarity: %2):\n%3\n\n")
+        QString next = QString("RAGBot::processQuestion(): Document %1 (similarity: %2):\n%3\n\n")
             .arg(i + 1)
             .arg(results[i].similarity, 0, 'f', 3)
             .arg(results[i].content);
+        if (context.size() + next.size() > maxContextChars) {
+            context += truncateTo(next, maxContextChars - context.size());
+            break;
+        }
+        context += next;
     }
     
     // Stage 1: Research with remote LLM
@@ -87,18 +134,21 @@ void RAGBot::processQuestion(const QString &question)
     QString researchAnswer;
     qDebug() << context;
     qDebug() << question;
-    qDebug() << researchAnswer;
-    
-    if (true) {
-        qInfo() << "m_llmConfig.enabled";
+
+    ConfigGenerator researchGenConfig = m_researchConfig.generatorConfig;
+    Generator *researchGen = buildGenerator(researchGenConfig);
+    if (researchGen) {
+        qInfo() << "RAGBot::processQuestion(): Research generator ready";
         QTextStream(stdout) << "\nBot (Research): " << Qt::flush;
-#if 0
-        researchAnswer = m_roleplayer->chat("", researchPrompt, false);
-#endif
+        researchAnswer = researchGen->generateText(
+            m_researchConfig.instruction,
+            researchPrompt,
+            false
+        );
         QTextStream(stdout) << "\n" << Qt::flush;
+        delete researchGen;
     } else {
-        qDebug() << "Would call local research model here";
-        researchAnswer = "[Research answer would appear here with local model]";
+        qWarning() << "RAGBot::processQuestion(): No research generator; skipping";
     }
     
     if (researchAnswer.isEmpty()) {
@@ -109,7 +159,7 @@ void RAGBot::processQuestion(const QString &question)
     QString roleplayAnswer;
     
     // Stage 2: Roleplay response
-    if (true) {
+    if (m_roleplayConfig.generatorConfig.isValid()) {
         qDebug() << "RAGBot::processQuestion(): Roleplay Response";
 
         QFile roleplayPromptFile("roleplayPrompt.txt");
@@ -125,16 +175,20 @@ void RAGBot::processQuestion(const QString &question)
         QString roleplayPrompt = rp.arg("Survivor", researchAnswer, question);
         qDebug() << roleplayPrompt;
         
-#if 0
-        QTextStream(stdout) << "\n" << m_config.characterName << ": " << Qt::flush;
-        roleplayAnswer = m_roleplayLLM->chat(
-            m_rpConfig.characterBackground,
-            roleplayPrompt,
-            true
-        );
-
-#endif 
-        QTextStream(stdout) << "\n" << Qt::flush;
+        ConfigGenerator roleplayGenConfig = m_roleplayConfig.generatorConfig;
+        Generator *roleplayGen = buildGenerator(roleplayGenConfig);
+        if (roleplayGen) {
+            QTextStream(stdout) << "\n" << m_roleplayConfig.characterName << ": " << Qt::flush;
+            roleplayAnswer = roleplayGen->generateText(
+                m_roleplayConfig.characterBackground,
+                roleplayPrompt,
+                true
+            );
+            QTextStream(stdout) << "\n" << Qt::flush;
+            delete roleplayGen;
+        } else {
+            qWarning() << "RAGBot::processQuestion(): No roleplay generator; skipping";
+        }
         
         if (roleplayAnswer.isEmpty()) {
             qWarning() << "RAGBot::processQuestio(): No response from roleplay LLM";
@@ -145,7 +199,6 @@ void RAGBot::processQuestion(const QString &question)
     if (!m_conversation_db.logConversation(queryEmb, question, researchAnswer, roleplayAnswer)) {
         qWarning() << "RAGBot::processQuestion(): Failed to log conversation to database";
     }
-#endif
 }
 
 

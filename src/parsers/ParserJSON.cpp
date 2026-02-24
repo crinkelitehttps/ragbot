@@ -19,6 +19,7 @@ const QString ParserJSON::extractText(const QByteArray &value)
         return {};
     }
 
+    qDebug() << "ParserJSON: " << value;
     QStringList texts;
     if (doc.isObject())
         extractTextRecursive(QJsonValue(doc.object()), texts);
@@ -64,7 +65,5 @@ void ParserJSON::extractTextRecursive(const QJsonValue &value, QStringList &text
             extractTextRecursive(item, texts);
     } else if (value.isString()) {
         texts.append(value.toString());
-    } else {
-        qDebug() << "ParserJSON: unhandled value type:" << value;
     }
 }
