@@ -5,7 +5,7 @@
 
 
 //--------------------------------------------------------------------------------
-GeneratorImmediate::GeneratorImmediate(ConfigGenerator generatorConfig) 
+GeneratorImmediate::GeneratorImmediate(ConfigGenerator& generatorConfig) 
     : Generator(generatorConfig)
     , m_config(generatorConfig)
 {
@@ -49,7 +49,7 @@ GeneratorImmediate::GeneratorImmediate(ConfigGenerator generatorConfig)
 
 
 //--------------------------------------------------------------------------------
-QVector<float> GeneratorImmediate::generate(const QString data) 
+QVector<float> GeneratorImmediate::generate(const QString& data) 
 {
     auto vt = common_tokenize(m_embedCtx, data.toStdString(), true);
     auto tokens = QVector<llama_token>(vt.begin(), vt.end());
