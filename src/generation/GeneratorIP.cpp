@@ -6,7 +6,7 @@
 
 
 //--------------------------------------------------------------------------------
-GeneratorIP::GeneratorIP(ConfigGenerator generatorConfig)
+GeneratorIP::GeneratorIP(ConfigGenerator& generatorConfig)
        : Generator(generatorConfig)
        , m_config(generatorConfig) 
 {
@@ -14,7 +14,7 @@ GeneratorIP::GeneratorIP(ConfigGenerator generatorConfig)
 
 
 //--------------------------------------------------------------------------------
-QVector<float> GeneratorIP::generate(const QString data) 
+QVector<float> GeneratorIP::generate(const QString& data) 
 {
     QJsonObject request;
     request["input"] = data;

@@ -20,9 +20,9 @@
 class GeneratorIP : public virtual Generator
 {
 public:
-    GeneratorIP(ConfigGenerator generatorConfig);
+    GeneratorIP(ConfigGenerator& generatorConfig);
 
-    QVector<float> generate(const QString data) override;
+    QVector<float> generate(const QString& data) override;
 
     QString generateText(
             QString& systemPrompt,

@@ -11,7 +11,7 @@ class Generator
 public:
     virtual ~Generator() = default;
 
-    virtual QVector<float> generate(const QString data) = 0;
+    virtual QVector<float> generate(const QString& data) = 0;
 
     virtual QString generateText(
             QString& systemPrompt,
@@ -22,7 +22,7 @@ public:
     virtual bool isValid() = 0;
 
 protected:
-    Generator(ConfigGenerator) {}
+    Generator(ConfigGenerator&) {}
 };
 
 #endif // GENERATOR_H
