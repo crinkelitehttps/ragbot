@@ -4,7 +4,10 @@
 #include <QString>
 #include <QVector>
 #include <QSqlDatabase>
+#include <faiss_c.h>
+#include <IndexFlat_c.h>
 #include "../generation/Generator.h"
+
 
 class EmbeddingDatabase
 {
@@ -17,7 +20,7 @@ public:
         float similarity;
     };
 
-    EmbeddingDatabase(const QString &dbName = "embeddings.db") 
+    EmbeddingDatabase(const QString &dbName = "rag_metadata.db") 
         : m_db()
     {
         initialize(dbName);
@@ -42,8 +45,9 @@ private:
     void initialize(const QString& dbName);
 
 private:
+    FaissIndex* m_index;
+    int m_dimension = 768;
     QSqlDatabase m_db;
-
 };
 
 #endif // EMBEDDINGDATABASE_H

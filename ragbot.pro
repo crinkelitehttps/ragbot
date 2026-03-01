@@ -51,6 +51,7 @@ INCLUDEPATH += $${QT_ROOT}/include/QtNetwork
 INCLUDEPATH += /home/joe/source/llama.cpp/include
 INCLUDEPATH += /home/joe/source/llama.cpp/common
 INCLUDEPATH += /home/joe/source/llama.cpp/ggml/include
+INCLUDEPATH += /home/joe/source/faiss/c_api
 
 # Static libraries
 LIBS += /home/joe/source/build-llama.cpp/common/libcommon.a
@@ -58,6 +59,8 @@ LIBS += /home/joe/source/build-llama.cpp/src/libllama.a
 LIBS += /home/joe/source/build-llama.cpp/ggml/src/libggml.a
 LIBS += /home/joe/source/build-llama.cpp/ggml/src/libggml-base.a
 LIBS += /home/joe/source/build-llama.cpp/ggml/src/libggml-cpu.a
+LIBS += /home/joe/source/faiss/build/faiss/libfaiss.a
+LIBS += -lopenblas -lgomp -ldl -lm
 
 # System libraries
 LIBS += -lgomp -lpthread -ldl -lm -lstdc++

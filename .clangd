@@ -6,6 +6,7 @@ CompileFlags:
     - -I/home/joe/Qt/5.15.2/gcc_64/include/QtSql
     - -I/home/joe/Qt/5.15.2/gcc_64/include/QtNetwork
     - -I/home/joe/source/llama.cpp/common/
+    - -I/home/joe/source/faiss/c_api/
     - -DQT_NETWORK_LIB
     - -DQT_SQL_LIB
     - -DQT_CORE_LIB
