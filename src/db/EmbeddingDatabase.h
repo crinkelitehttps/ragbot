@@ -5,12 +5,23 @@
 #include <QVector>
 #include <QSqlDatabase>
 #include <faiss_c.h>
+#include <Index_c.h>
 #include <IndexFlat_c.h>
 #include "../generation/Generator.h"
 
 
 class EmbeddingDatabase
 {
+
+private:
+   struct FaissDeleter {
+       void operator()(FaissIndex* index) const {
+           if (index) {
+               faiss_Index_free(index);
+           }
+       }
+    };
+
 public:
 
     struct SearchResult {
@@ -40,13 +51,12 @@ public:
     );
 
 private:
-    float cosineSimilarity(const QVector<float> &a, const float *b, int size);
     QByteArray fileChecksum(const QString& filename); 
     void initialize(const QString& dbName);
 
 private:
-    FaissIndex* m_index;
-    int m_dimension = 768;
+    std::unique_ptr<FaissIndex, FaissDeleter> m_index;
+    int m_dimension = 768; // TODO cosntexpr?  static
     QSqlDatabase m_db;
 };
 

@@ -52,11 +52,15 @@ void EmbeddingDatabase::initialize(const QString& dbName)
 
     // Initialize FAISS Index (Flat L2)
     // Note: If m_dimension is 384 or 768, ensure it's set in the constructor/header
-    faiss_IndexFlatL2_new_with(&m_index, m_dimension);
+    FaissIndex* rawIndex = nullptr;
+    int errorCode = faiss_IndexFlatL2_new_with(&rawIndex, m_dimension);
+
+    if (errorCode) {
+        qCritical() << "FAISS Error: Could not create index. Code:" << errorCode;
+    }
     
-    // TODO: On startup, you should ideally load existing embeddings from a 
-    // separate BLOB table into the FAISS index to persist state across restarts.
 }
+
 
 //--------------------------------------------------------------------------------
 QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
@@ -66,23 +70,26 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
 {
     if (queryEmbedding.size() != m_dimension || m_index == nullptr) return {};
 
-    // 1. Prepare Query Vector (FAISS expects float*)
+    // 1. Prepare Query Vector
     QVector<float> normalizedQuery = queryEmbedding;
     normalizeVector(normalizedQuery.data(), m_dimension);
 
     // 2. Search FAISS
     QVector<float> distances(topK);
-    QVector<long long> labels(topK); // FAISS IDs
     
-    faiss_Index_search(m_index, 1, normalizedQuery.constData(), topK, distances.data(), labels.data());
+    // FIX: Use idx_t instead of long long to match the C API signature
+    QVector<idx_t> labels(topK); 
+    
+    // Pass the pointer to distances and labels
+    faiss_Index_search(m_index.get(), 1, normalizedQuery.constData(), topK, distances.data(), labels.data());
 
-    // 3. Fetch Metadata from SQLite for the specific IDs found
+    // 3. Fetch Metadata
     QVector<SearchResult> results;
     QSqlQuery query(m_db);
 
     for (int i = 0; i < topK; ++i) {
-        long long faissId = labels[i];
-        if (faissId < 0) continue; // FAISS returns -1 if not enough results
+        idx_t faissId = labels[i]; // idx_t handles the ID
+        if (faissId < 0) continue; 
 
         query.prepare(R"(
             SELECT c.content, s.source_file 
@@ -90,19 +97,23 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
             JOIN sources s ON c.source_id = s.id
             WHERE c.faiss_id = ?
         )");
-        query.addBindValue(faissId);
+        
+        // QVariant will handle the conversion from idx_t (long) to SQL integer
+        query.addBindValue(static_cast<qlonglong>(faissId));
 
         if (query.exec() && query.next()) {
             SearchResult res;
             res.content = query.value(0).toString();
             res.sourceFile = query.value(1).toString();
-            res.similarity = 1.0f - (distances[i] / 2.0f); // Convert L2 distance to approx similarity
+            // L2 to Cosine approx: 1 - (d^2 / 2)
+            res.similarity = 1.0f - (distances[i] / 2.0f); 
             results.append(res);
         }
     }
 
     return results;
 }
+
 
 //--------------------------------------------------------------------------------
 bool EmbeddingDatabase::saveEmbedding(
@@ -131,15 +142,15 @@ bool EmbeddingDatabase::saveEmbedding(
     }
 
     // 2. Add to FAISS Index
-    long long currentFaissId = faiss_Index_ntotal(m_index);
+    auto currentFaissId = faiss_Index_ntotal(m_index.get());
     QVector<float> normalizedEmb = embedding;
     normalizeVector(normalizedEmb.data(), m_dimension);
 
-    faiss_Index_add(m_index, 1, normalizedEmb.constData());
+    faiss_Index_add(m_index.get(), 1, normalizedEmb.constData());
 
     // 3. Save mapping to SQLite
     q.prepare("INSERT INTO chunks (faiss_id, source_id, content) VALUES (?, ?, ?)");
-    q.addBindValue(currentFaissId);
+    q.addBindValue(static_cast<qlonglong>(currentFaissId));
     q.addBindValue(sourceId);
     q.addBindValue(textContent);
 
