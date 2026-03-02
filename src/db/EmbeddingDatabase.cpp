@@ -30,7 +30,6 @@ void EmbeddingDatabase::initialize(const QString& dbName)
 
     QSqlQuery query(m_db);
 
-    // Table for files/sources
     query.exec(R"(
         CREATE TABLE IF NOT EXISTS sources (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +39,6 @@ void EmbeddingDatabase::initialize(const QString& dbName)
         );
     )");
 
-    // Table for chunks (maps FAISS index ID to text)
     query.exec(R"(
         CREATE TABLE IF NOT EXISTS chunks (
             faiss_id INTEGER PRIMARY KEY,
@@ -50,14 +48,12 @@ void EmbeddingDatabase::initialize(const QString& dbName)
         );
     )");
 
-    // Initialize FAISS Index (Flat L2)
-    // Note: If m_dimension is 384 or 768, ensure it's set in the constructor/header
     FaissIndex* rawIndex = nullptr;
-    int errorCode = faiss_IndexFlatL2_new_with(&rawIndex, m_dimension);
 
-    if (errorCode) {
-        qCritical() << "FAISS Error: Could not create index. Code:" << errorCode;
-    }
+    if (faiss_IndexFlatL2_new_with(&rawIndex, m_dimension)) {
+        m_index.reset(rawIndex);
+        loadExistingEmbeddings();
+    };
     
 }
 
@@ -156,6 +152,42 @@ bool EmbeddingDatabase::saveEmbedding(
 
     return q.exec();
 }
+
+//--------------------------------------------------------------------------------
+void EmbeddingDatabase::loadExistingEmbeddings()
+{
+    if (!m_index) return;
+
+    QSqlQuery query(m_db);
+    // We only need the embeddings to populate the FAISS index.
+    // We assume the faiss_id in the DB matches the order/count of the index.
+    query.prepare("SELECT embedding FROM embeddings ORDER BY id ASC");
+
+    if (!query.exec()) {
+        qCritical() << "Warm Start failed:" << query.lastError().text();
+        return;
+    }
+
+    int count = 0;
+    while (query.next()) {
+        QByteArray ba = query.value(0).toByteArray();
+        const float* data = reinterpret_cast<const float*>(ba.constData());
+        int numElements = ba.size() / sizeof(float);
+
+        if (numElements == m_dimension) {
+            // We must normalize because we are using L2 to simulate Cosine
+            QVector<float> vec(numElements);
+            memcpy(vec.data(), data, ba.size());
+            normalizeVector(vec.data(), m_dimension);
+
+            faiss_Index_add(m_index.get(), 1, vec.constData());
+            count++;
+        }
+    }
+
+    qDebug() << "Warm Start complete. Loaded" << count << "embeddings into FAISS.";
+}
+
 
 //--------------------------------------------------------------------------------
 QByteArray EmbeddingDatabase::fileChecksum(const QString &fileName) {

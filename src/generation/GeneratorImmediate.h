@@ -18,8 +18,9 @@ class GeneratorImmediate : public virtual Generator
 {
 public:
     GeneratorImmediate(ConfigGenerator& generatorConfig);
+    ~GeneratorImmediate() override;
 
-    bool isValid() override { return m_config.isValid() && m_config.isImmediate; };
+    bool isValid() override;
     QVector<float> generate(const QString& data) override;
     QString generateText(
             QString& systemMessage,

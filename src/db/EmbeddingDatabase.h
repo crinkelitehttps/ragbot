@@ -50,6 +50,8 @@ public:
         const int topK = 10
     );
 
+    void loadExistingEmbeddings();
+
 private:
     QByteArray fileChecksum(const QString& filename); 
     void initialize(const QString& dbName);
