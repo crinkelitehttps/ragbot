@@ -38,8 +38,6 @@ Embedder::Embedder(ConfigEmbed config)
 void Embedder::processAllFiles()
 {
     int total = 0, processed = 0;
-
-    
     
     QDirIterator countIt(
             m_config.sourceFiles,

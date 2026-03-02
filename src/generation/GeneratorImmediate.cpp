@@ -31,7 +31,7 @@ GeneratorImmediate::GeneratorImmediate(ConfigGenerator& generatorConfig)
     // model_params.n_gpu_layers = 99; 
 
     m_embedModel = llama_model_load_from_file(
-        "/home/joe/.local/models/nomic-embed-text-v1.5.f32.gguf", 
+        "/home/joe/.local/share/models/nomic-embed-text-v1.5.f32.gguf", 
         model_params
     );
 
@@ -67,6 +67,8 @@ GeneratorImmediate::~GeneratorImmediate()
     }
 }
 
+
+//--------------------------------------------------------------------------------
 QVector<float> GeneratorImmediate::generate(const QString& data) 
 {
     if (!m_embedCtx) return {};
@@ -80,7 +82,10 @@ QVector<float> GeneratorImmediate::generate(const QString& data)
 
     // 3. Clear KV cache using the NEW API
     // Instead of llama_kv_cache_clear, use:
-    llama_kv_cache_seq_rm(m_embedCtx, -1, 0, -1);
+    
+    // not sure about this..
+    llama_memory_t kv_cache = llama_get_memory(m_embedCtx);
+    llama_memory_seq_rm(kv_cache, -1, 0, -1);
 
     // 4. Prepare Batch
     llama_batch batch = llama_batch_init(vt.size(), 0, 1);
@@ -110,63 +115,8 @@ QVector<float> GeneratorImmediate::generate(const QString& data)
     return result;
 }
 
-#if 0 
+
 //--------------------------------------------------------------------------------
-QVector<float> GeneratorImmediate::generate(const QString& data) 
-{
-    if (!m_embedCtx) return {};
-
-    // Nomic 1.5 specific: Needs task prefix for high performance
-    // Use "search_document: " for RAG storage and "search_query: " for retrieval
-    std::string preparedData = "search_document: " + data.toStdString();
-
-    auto vt = common_tokenize(m_embedCtx, preparedData, true, true);
-    
-    if (vt.empty()) return {};
-    
-    // Clamp to context window
-    int n_ctx = llama_n_ctx(m_embedCtx);
-    if ((int)vt.size() > n_ctx) {
-        vt.resize(n_ctx);
-    }
-    
-    // Clear KV cache for fresh embedding inference
-    llama_kv_cache_clear(m_embedCtx);
-
-    llama_batch batch = llama_batch_init(vt.size(), 0, 1);
-    for (size_t i = 0; i < vt.size(); i++) {
-        // Last token must have logits/output enabled for pooling
-        bool is_last = (i == vt.size() - 1);
-        common_batch_add(batch, vt[i], i, {0}, is_last);
-    }
-    
-    // In newer llama.cpp, llama_decode is the unified call for encode/decode
-    if (llama_decode(m_embedCtx, batch) != 0) {
-        qWarning() << "GeneratorImmediate::generate(): llama_decode failed";
-        llama_batch_free(batch);
-        return {};
-    }
-    
-    int n_embd = llama_model_n_embd(m_embedModel);
-    const float *embeddings = llama_get_embeddings_seq(m_embedCtx, 0);
-    
-    if (!embeddings) {
-        embeddings = llama_get_embeddings(m_embedCtx);
-    }
-    
-    QVector<float> result;
-    if (embeddings) {
-        result.reserve(n_embd);
-        for (int i = 0; i < n_embd; i++) {
-            result.append(embeddings[i]);
-        }
-    }
-    
-    llama_batch_free(batch);
-    return result;
-}
-#endif 
-
 QString GeneratorImmediate::generateText(
         QString& systemMessage,
         QString& prompt,
@@ -184,7 +134,9 @@ QString GeneratorImmediate::generateText(
     if (vt.empty()) return "";
 
     // 3. Clear and Prime the KV Cache with the prompt
-    llama_kv_cache_seq_rm(m_embedCtx, -1, 0, -1);
+
+    llama_memory_t kv_cache = llama_get_memory(m_embedCtx);
+    llama_memory_seq_rm(kv_cache, -1, 0, -1);
     
     llama_batch batch = llama_batch_get_one(vt.data(), vt.size());
     if (llama_decode(m_embedCtx, batch) != 0) return "Error: Decode failed.";
@@ -233,30 +185,6 @@ QString GeneratorImmediate::generateText(
     return response.trimmed();
 }
 
-
-#if 0
-//--------------------------------------------------------------------------------
-QString GeneratorImmediate::generateText(
-        QString& systemMessage,
-        QString& prompt,
-        bool isStream
-    ) 
-{
-    // Note: If you are using nomic-embed, this will not produce text.
-    // If you load a text model (e.g. Llama-3-8B) in this class, the logic goes here.
-    
-    if (!isValid()) return "Generator not initialized.";
-
-    // Simple placeholder to mirror API-style behavior
-    // Real implementation would involve a loop calling llama_decode 
-    // and llama_sample_token_greedy until an EOT token is found.
-    
-    qDebug() << "Text generation requested for prompt:" << prompt;
-    
-    return QString("Text generation logic for local llama.cpp goes here. "
-                   "Current model is likely embedding-only.");
-}
-#endif
 
 //--------------------------------------------------------------------------------
 bool GeneratorImmediate::isValid() 
