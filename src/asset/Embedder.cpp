@@ -121,6 +121,7 @@ void Embedder::embedFile(const QString &sourcePath)
     if (sourceFile.open(QIODevice::ReadOnly)) {
         const auto fileContents = sourceFile.readAll();
         const auto extractedText = m_parser->extractText(fileContents);
+
         qDebug() << "Embedder::embedFile()" << extractedText;
         const auto embedding = m_generator->generate(extractedText);
         sourceFile.close();

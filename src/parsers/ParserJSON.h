@@ -13,7 +13,11 @@ public:
 
     const QString extractText(const QByteArray& value) override;
 private:
-    void extractTextRecursive(const QJsonValue& value, QStringList& texts);
+    void extractTextRecursive(
+        const QJsonValue& value,
+        QStringList& texts,
+        const QString& prefix = QString()
+    );
 
 };
 #endif // PARSERJSON_H

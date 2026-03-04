@@ -31,39 +31,55 @@ const QString ParserJSON::extractText(const QByteArray &value)
 
 
 //--------------------------------------------------------------------------------
-void ParserJSON::extractTextRecursive(const QJsonValue &value, QStringList &texts)
+void ParserJSON::extractTextRecursive(
+        const QJsonValue &value,
+        QStringList &texts,
+        const QString &prefix
+    )
 {
     if (value.isObject()) {
         const QJsonObject obj = value.toObject();
         for (auto it = obj.begin(); it != obj.end(); ++it) {
-            const QString &key = it.key();
-            const QJsonValue &val = it.value();
+            QString key = it.key();
+            
+            // 1. Skip technical noise that doesn't help Roleplay
+            if (key == "//" || key == "type" || key == "copy-from") continue;
 
-            if (val.isString()) {
-                const QString str = val.toString();
-                if (str.length() > 1 && (str.startsWith('{') || str.startsWith('['))) {
-                    QJsonDocument nested = QJsonDocument::fromJson(str.toUtf8());
-                    if (!nested.isNull()) {
-                        extractTextRecursive(
-                            nested.isObject() ? QJsonValue(nested.object())
-                                              : QJsonValue(nested.array()),
-                            texts);
-                        continue;
-                    }
-                }
-                texts.append(QStringLiteral("%1: %2").arg(key, str));
-            } else if (val.isDouble()) {
-                texts.append(QStringLiteral("%1: %2").arg(key, QString::number(val.toDouble())));
-            } else if (val.isBool()) {
-                texts.append(QStringLiteral("%1: %2").arg(key, val.toBool() ? "true" : "false"));
+            const QJsonValue &val = it.value();
+            // Create a breadcrumb trail (e.g., "armor_data coverage")
+            QString fullKey = prefix.isEmpty() ? key : QString("%1 %2").arg(prefix, key);
+
+            if (val.isObject() || val.isArray()) {
+                extractTextRecursive(val, texts, fullKey);
             } else {
-                extractTextRecursive(val, texts);
+                QString valStr;
+                if (val.isString()) valStr = val.toString();
+                else if (val.isDouble()) valStr = QString::number(val.toDouble());
+                else if (val.isBool()) valStr = val.toBool() ? "true" : "false";
+
+                // 2. Format as a descriptive sentence fragment
+                // Example: "bash damage is 15" instead of "bash: 15"
+                texts.append(QString("%1 is %2").arg(fullKey.replace('_', ' '), valStr));
             }
         }
     } else if (value.isArray()) {
-        for (const QJsonValue &item : value.toArray())
-            extractTextRecursive(item, texts);
-    } else if (value.isString()) {
-        texts.append(value.toString());
+        const QJsonArray arr = value.toArray();
+        QStringList arrayItems;
+        for (const QJsonValue &item : arr) {
+            if (item.isString()) {
+                arrayItems.append(item.toString());
+            } else {
+                extractTextRecursive(item, texts, prefix);
+            }
+        }
+        // 3. Handle arrays of strings (like flags or materials) cleanly
+
+#if 1
+        if (!arrayItems.isEmpty()) {
+            texts.append(QString("%1 includes: %2")
+                    .arg(QString(prefix).replace('_', ' '), arrayItems.join(", ")));
+        }
+#endif
     }
 }
+

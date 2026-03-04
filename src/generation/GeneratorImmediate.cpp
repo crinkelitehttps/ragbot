@@ -77,8 +77,32 @@ QVector<float> GeneratorImmediate::generate(const QString& data)
     std::string preparedData = "search_document: " + data.toStdString();
 
     // 2. Tokenize using common helper
+    //auto vt = common_tokenize(m_embedCtx, preparedData, true, true);
+    //if (vt.empty()) return {};
+
     auto vt = common_tokenize(m_embedCtx, preparedData, true, true);
-    if (vt.empty()) return {};
+
+#if 0
+    if (vt.size() > llama_n_ctx(m_embedCtx)) {
+        qWarning() << "GeneratorImmediate::generate() [ data too big ]";
+        vt.resize(llama_n_ctx(m_embedCtx)); 
+    }
+#endif
+
+#if 0
+    int max_batch = llama_n_batch(m_embedCtx); 
+    if (vt.size() > max_batch) {
+        qWarning() << "Data exceeds n_batch. Truncating.";
+        vt.resize(max_batch);
+    }
+#endif 
+    // Use n_ubatch as the hard ceiling for the decode call
+    int safe_limit = llama_n_ubatch(m_embedCtx); 
+    
+    if (vt.size() > safe_limit) {
+        qWarning() << "Truncating tokens from" << vt.size() << "to" << safe_limit;
+        vt.resize(safe_limit);
+    }
 
     // 3. Clear KV cache using the NEW API
     // Instead of llama_kv_cache_clear, use:
