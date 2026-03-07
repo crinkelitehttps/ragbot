@@ -17,6 +17,7 @@ void normalizeVector(float* data, int dim) {
     for (int i = 0; i < dim; i++) data[i] /= norm;
 }
 
+
 //--------------------------------------------------------------------------------
 void EmbeddingDatabase::initialize(const QString& dbName)
 {
@@ -50,10 +51,13 @@ void EmbeddingDatabase::initialize(const QString& dbName)
 
     FaissIndex* rawIndex = nullptr;
 
-    if (faiss_IndexFlatL2_new_with(&rawIndex, m_dimension)) {
+    // 0 means success in FAISS C API
+    if (faiss_IndexFlatL2_new_with(&rawIndex, m_dimension) == 0) {
         m_index.reset(rawIndex);
         loadExistingEmbeddings();
-    };
+    } else {
+        qCritical() << "Failed to create FAISS index!";
+    }
     
 }
 
@@ -153,6 +157,7 @@ bool EmbeddingDatabase::saveEmbedding(
     return q.exec();
 }
 
+
 //--------------------------------------------------------------------------------
 void EmbeddingDatabase::loadExistingEmbeddings()
 {
@@ -200,6 +205,7 @@ QByteArray EmbeddingDatabase::fileChecksum(const QString &fileName) {
     return QByteArray();
 }
 
+
 //--------------------------------------------------------------------------------
 bool EmbeddingDatabase::isEmbedded(const QString& sourceFile)
 {
@@ -209,3 +215,5 @@ bool EmbeddingDatabase::isEmbedded(const QString& sourceFile)
     
     return check.exec() && check.next();
 }
+
+

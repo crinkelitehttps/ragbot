@@ -73,58 +73,31 @@ QVector<float> GeneratorImmediate::generate(const QString& data)
 {
     if (!m_embedCtx) return {};
 
-    // 1. Task Prefix (Nomic Requirement)
     std::string preparedData = "search_document: " + data.toStdString();
-
-    // 2. Tokenize using common helper
-    //auto vt = common_tokenize(m_embedCtx, preparedData, true, true);
-    //if (vt.empty()) return {};
 
     auto vt = common_tokenize(m_embedCtx, preparedData, true, true);
 
-#if 0
-    if (vt.size() > llama_n_ctx(m_embedCtx)) {
-        qWarning() << "GeneratorImmediate::generate() [ data too big ]";
-        vt.resize(llama_n_ctx(m_embedCtx)); 
-    }
-#endif
-
-#if 0
-    int max_batch = llama_n_batch(m_embedCtx); 
-    if (vt.size() > max_batch) {
-        qWarning() << "Data exceeds n_batch. Truncating.";
-        vt.resize(max_batch);
-    }
-#endif 
-    // Use n_ubatch as the hard ceiling for the decode call
-    int safe_limit = llama_n_ubatch(m_embedCtx); 
+    const auto safe_limit = llama_n_ubatch(m_embedCtx); 
     
     if (vt.size() > safe_limit) {
         qWarning() << "Truncating tokens from" << vt.size() << "to" << safe_limit;
         vt.resize(safe_limit);
     }
 
-    // 3. Clear KV cache using the NEW API
-    // Instead of llama_kv_cache_clear, use:
-    
-    // not sure about this..
     llama_memory_t kv_cache = llama_get_memory(m_embedCtx);
     llama_memory_seq_rm(kv_cache, -1, 0, -1);
 
-    // 4. Prepare Batch
     llama_batch batch = llama_batch_init(vt.size(), 0, 1);
     for (size_t i = 0; i < vt.size(); i++) {
         common_batch_add(batch, vt[i], i, {0}, (i == vt.size() - 1));
     }
 
-    // 5. Decode/Encode
     if (llama_decode(m_embedCtx, batch) != 0) {
         qWarning() << "llama_decode failed";
         llama_batch_free(batch);
         return {};
     }
 
-    // 6. Extraction
     int n_embd = llama_model_n_embd(m_embedModel);
     const float *emb = llama_get_embeddings_seq(m_embedCtx, 0);
     if (!emb) emb = llama_get_embeddings(m_embedCtx);
@@ -149,15 +122,10 @@ QString GeneratorImmediate::generateText(
 {
     if (!isValid()) return "Generator not initialized.";
 
-    // 1. Prepare the full prompt
-    // Note: nomic-embed can't do this, so this assumes you've loaded a text model
     QString fullPrompt = systemMessage + "\n\n" + prompt;
     
-    // 2. Tokenize
     auto vt = common_tokenize(m_embedCtx, fullPrompt.toStdString(), true, true);
     if (vt.empty()) return "";
-
-    // 3. Clear and Prime the KV Cache with the prompt
 
     llama_memory_t kv_cache = llama_get_memory(m_embedCtx);
     llama_memory_seq_rm(kv_cache, -1, 0, -1);
@@ -175,7 +143,6 @@ QString GeneratorImmediate::generateText(
     
     // 5. Generation Loop
     while (n_cur < n_predict) {
-        // Sample the next token
         llama_token id = llama_sampler_sample(smpl, m_embedCtx, -1);
         
         // Check for End of Generation

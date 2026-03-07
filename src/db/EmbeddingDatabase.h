@@ -58,7 +58,7 @@ private:
 
 private:
     std::unique_ptr<FaissIndex, FaissDeleter> m_index;
-    int m_dimension = 768; // TODO cosntexpr?  static
+    int m_dimension = 768;
     QSqlDatabase m_db;
 };
 

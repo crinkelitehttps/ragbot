@@ -119,17 +119,18 @@ void Embedder::embedFile(const QString &sourcePath)
     QFile sourceFile(sourcePath);
 
     if (sourceFile.open(QIODevice::ReadOnly)) {
-        const auto fileContents = sourceFile.readAll();
-        const auto extractedText = m_parser->extractText(fileContents);
-
-        qDebug() << "Embedder::embedFile()" << extractedText;
-        const auto embedding = m_generator->generate(extractedText);
-        sourceFile.close();
-        if(m_embedDB.saveEmbedding(embedding, sourcePath, extractedText)) {
-            qDebug() << "Embedder::embedderFile() [ saveEmbeeding returned true ]";
-            return;
+        const auto fileChunks = m_parser->toChunks(sourceFile.readAll());
+        for (const auto &chunk : fileChunks) {
+            const auto embedding = m_generator->generate(chunk);
+            if(m_embedDB.saveEmbedding(embedding, sourcePath, chunk)) {
+                qDebug() << "Embedder::embedderFile() [ saveEmbeeding returned true ]";
+                return;
+            };
         };
+        sourceFile.close();
+    } else {
         qWarning() << "Embedder::embedderFile() [ saveEmbeeding returned false ]";
     };
 
 };
+

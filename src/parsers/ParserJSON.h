@@ -11,7 +11,8 @@ class ParserJSON : public Parser
 public:
     ParserJSON();
 
-    const QString extractText(const QByteArray& value) override;
+    const QStringList toChunks(const QByteArray& data) override;
+
 private:
     void extractTextRecursive(
         const QJsonValue& value,
@@ -19,5 +20,6 @@ private:
         const QString& prefix = QString()
     );
 
+    QString stringifyObject(const QJsonObject& obj);
 };
 #endif // PARSERJSON_H

@@ -14,9 +14,11 @@ struct ConfigGenerator {
     { 
         if (isImmediate) {
             return true;
+            qDebug() << "ConfigGenerator::isValid(): [ isImmediate ]";
         }
         return !basePath.isEmpty()
             && !modelName.isEmpty();
+            qDebug() << "ConfigGenerator::isValid(): [ isIP ]";
     }
 };
 

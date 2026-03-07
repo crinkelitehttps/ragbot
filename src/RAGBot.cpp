@@ -54,6 +54,7 @@ void RAGBot::processQuestion(const QString &question)
     qDebug() << "RAGBot::processQuestion(): " << question;
 
     const auto buildGenerator = [](ConfigGenerator &config) -> Generator* {
+#if 0
         auto driverLoaded = [](Generator* generator) {
             if (generator && generator->isValid()) {
                 return generator;
@@ -71,6 +72,7 @@ void RAGBot::processQuestion(const QString &question)
             qDebug() << "RAGBot::processQuestion() [ GeneratorIP ]";
             return generator;
         }
+#endif
         return static_cast<Generator*>(nullptr);
     };
 
@@ -136,6 +138,7 @@ void RAGBot::processQuestion(const QString &question)
     qDebug() << question;
 
     ConfigGenerator researchGenConfig = m_researchConfig.generatorConfig;
+    researchGenConfig.isImmediate = true;
     Generator *researchGen = buildGenerator(researchGenConfig);
     if (researchGen) {
         qInfo() << "RAGBot::processQuestion(): Research generator ready";

@@ -20,7 +20,6 @@ public:
     void embedFile(const QString& sourcePath);
 
     Generator* initGenerator();
-
 private:
 
     ConfigEmbed m_config;
