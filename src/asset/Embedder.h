@@ -1,7 +1,7 @@
 #ifndef EMBEDDER_H
 #define EMBEDDER_H
 
-#include "../config/ConfigEmbed.h"
+#include <QFileInfo>
 #include "../generation/Generator.h"
 #include "../db/EmbeddingDatabase.h"
 #include "llama.h"
@@ -10,22 +10,23 @@
 class Embedder
 {
 public:
-    Embedder(ConfigEmbed embedderConfig);
-    
+    Embedder(const QJsonObject& embedderConfig);
+
     ~Embedder()
     {
     }
 
     void processAllFiles();
-    void embedFile(const QString& sourcePath);
+    void fileEmbed(const QString& sourcePath);
+    QVector<float>& textVectors();
+    bool isValid() { return m_isValid; }
 
-    Generator* initGenerator();
 private:
-
-    ConfigEmbed m_config;
-    EmbeddingDatabase m_embedDB;
+    EmbeddingDatabase* m_db;
     Generator* m_generator;
     Parser* m_parser;
+    QString m_files;
+    bool m_isValid {};
 
 };
 

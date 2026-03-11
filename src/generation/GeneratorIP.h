@@ -20,7 +20,7 @@
 class GeneratorIP : public virtual Generator
 {
 public:
-    GeneratorIP(ConfigGenerator& generatorConfig);
+    GeneratorIP(const QJsonObject& config);
 
     QVector<float> generate(const QString& data) override;
 
@@ -34,8 +34,9 @@ public:
 
 private:
 
-    ConfigGenerator m_config;
     QNetworkAccessManager m_network;
+    QString m_modelPath;
+    const unsigned int m_timeout;
 };
 
 #endif // GENERATORIP_H

@@ -1,6 +1,5 @@
 #include "EmbeddingDatabase.h"
 #include <cmath>
-#include <algorithm>
 #include <QDebug>
 #include <QFile>
 #include <QCryptographicHash>
@@ -52,7 +51,7 @@ void EmbeddingDatabase::initialize(const QString& dbName)
     FaissIndex* rawIndex = nullptr;
 
     // 0 means success in FAISS C API
-    if (faiss_IndexFlatL2_new_with(&rawIndex, m_dimension) == 0) {
+    if (faiss_IndexFlatL2_new_with(&rawIndex, m_dimensions) == 0) {
         m_index.reset(rawIndex);
         loadExistingEmbeddings();
     } else {
@@ -68,11 +67,11 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
         int topK
     )
 {
-    if (queryEmbedding.size() != m_dimension || m_index == nullptr) return {};
+    if (queryEmbedding.size() != m_dimensions || m_index == nullptr) return {};
 
     // 1. Prepare Query Vector
     QVector<float> normalizedQuery = queryEmbedding;
-    normalizeVector(normalizedQuery.data(), m_dimension);
+    normalizeVector(normalizedQuery.data(), m_dimensions);
 
     // 2. Search FAISS
     QVector<float> distances(topK);
@@ -81,7 +80,14 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
     QVector<idx_t> labels(topK); 
     
     // Pass the pointer to distances and labels
-    faiss_Index_search(m_index.get(), 1, normalizedQuery.constData(), topK, distances.data(), labels.data());
+    faiss_Index_search(
+        m_index.get(),
+        1,
+        normalizedQuery.constData(),
+        topK,
+        distances.data(),
+        labels.data()
+    );
 
     // 3. Fetch Metadata
     QVector<SearchResult> results;
@@ -103,7 +109,9 @@ QVector<EmbeddingDatabase::SearchResult> EmbeddingDatabase::search(
 
         if (query.exec() && query.next()) {
             SearchResult res;
+#if 0
             res.content = query.value(0).toString();
+#endif
             res.sourceFile = query.value(1).toString();
             // L2 to Cosine approx: 1 - (d^2 / 2)
             res.similarity = 1.0f - (distances[i] / 2.0f); 
@@ -121,7 +129,7 @@ bool EmbeddingDatabase::saveEmbedding(
     const QString &sourcePath,
     const QString &textContent)
 {
-    if (embedding.size() != m_dimension) return false;
+    if (embedding.size() != m_dimensions) return false;
 
     // 1. Ensure Source exists or Get ID
     const QByteArray fcs = fileChecksum(sourcePath);
@@ -144,7 +152,7 @@ bool EmbeddingDatabase::saveEmbedding(
     // 2. Add to FAISS Index
     auto currentFaissId = faiss_Index_ntotal(m_index.get());
     QVector<float> normalizedEmb = embedding;
-    normalizeVector(normalizedEmb.data(), m_dimension);
+    normalizeVector(normalizedEmb.data(), m_dimensions);
 
     faiss_Index_add(m_index.get(), 1, normalizedEmb.constData());
 
@@ -179,11 +187,11 @@ void EmbeddingDatabase::loadExistingEmbeddings()
         const float* data = reinterpret_cast<const float*>(ba.constData());
         int numElements = ba.size() / sizeof(float);
 
-        if (numElements == m_dimension) {
+        if (numElements == m_dimensions) {
             // We must normalize because we are using L2 to simulate Cosine
             QVector<float> vec(numElements);
             memcpy(vec.data(), data, ba.size());
-            normalizeVector(vec.data(), m_dimension);
+            normalizeVector(vec.data(), m_dimensions);
 
             faiss_Index_add(m_index.get(), 1, vec.constData());
             count++;

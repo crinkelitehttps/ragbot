@@ -23,18 +23,19 @@ private:
     };
 
 public:
-
     struct SearchResult {
-        QString content;
         QString sourceFile;
         QString itemId;
         float similarity;
     };
 
-    EmbeddingDatabase(const QString &dbName = "rag_metadata.db") 
+    EmbeddingDatabase(const QJsonObject& embedConfig) 
         : m_db()
     {
-        initialize(dbName);
+        const auto databaseName = embedConfig.value("databaseName").toString();
+        if (!databaseName.isEmpty()) {
+            initialize(databaseName);
+        }
     };
  
     bool isEmbedded(const QString& sourceFile);
@@ -50,6 +51,11 @@ public:
         const int topK = 10
     );
 
+    QVector<SearchResult> textResults(
+        const QString& queryEmbedding,
+        const int topK = 10
+    );
+
     void loadExistingEmbeddings();
 
 private:
@@ -58,7 +64,7 @@ private:
 
 private:
     std::unique_ptr<FaissIndex, FaissDeleter> m_index;
-    int m_dimension = 768;
+    const static int m_dimensions { 768 };
     QSqlDatabase m_db;
 };
 

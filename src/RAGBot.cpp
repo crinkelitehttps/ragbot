@@ -1,36 +1,23 @@
-#include <QTextStream>
-#include <QDebug>
 #include <QCoreApplication>
+#include <QDebug>
 #include <QFile>
-
+#include <QTextStream>
 #include "RAGBot.h"
-#include "generation/GeneratorImmediate.h"
-#include "generation/GeneratorIP.h"
-
-// llama_silenced.h
 
 //--------------------------------------------------------------------------------
-RAGBot::RAGBot(
-        ConfigEmbed embedConfig,
-        ConfigResearch researchConfig,
-        ConfigRoleplay roleplayConfig
-    )
-    : m_embedConfig(embedConfig)
-    , m_researchConfig(researchConfig)
-    , m_roleplayConfig(roleplayConfig)
-    , m_embedder(embedConfig)
-    , m_researcher(researchConfig)
-    , m_roleplayer(roleplayConfig)
+RAGBot::RAGBot(Embedder embedder, Researcher researcher, Roleplayer roleplayer)
+    : m_embedder(embedder)
+    , m_researcher(researcher)
+    , m_roleplayer(roleplayer)
 {
     qDebug() << "RAGBot::RAGBot()";
 }
 
-
 //--------------------------------------------------------------------------------
-void RAGBot::startChatLoop()
+void RAGBot::init()
 {
     QTextStream in(stdin);
-    
+
     while (true) {
         QTextStream(stdout) << "\nYou: " << Qt::flush;
         QString question = in.readLine().trimmed();
@@ -53,29 +40,7 @@ void RAGBot::processQuestion(const QString &question)
 {
     qDebug() << "RAGBot::processQuestion(): " << question;
 
-    const auto buildGenerator = [](ConfigGenerator &config) -> Generator* {
 #if 0
-        auto driverLoaded = [](Generator* generator) {
-            if (generator && generator->isValid()) {
-                return generator;
-            }
-            delete generator;
-            return static_cast<Generator*>(nullptr);
-        };
-        if (config.isImmediate) {
-            if (auto* generator = driverLoaded(new GeneratorImmediate(config))) {
-                qDebug() << "RAGBot::processQuestion() [ GeneratorImmediate ]";
-                return generator;
-            }
-        }
-        if (auto* generator = driverLoaded(new GeneratorIP(config))) {
-            qDebug() << "RAGBot::processQuestion() [ GeneratorIP ]";
-            return generator;
-        }
-#endif
-        return static_cast<Generator*>(nullptr);
-    };
-
     const auto truncateTo = [](const QString &text, int maxChars) {
         if (maxChars <= 0 || text.size() <= maxChars) {
             return text;
@@ -83,27 +48,15 @@ void RAGBot::processQuestion(const QString &question)
         return text.left(maxChars);
     };
 
-    ConfigGenerator embedGenConfig = m_embedConfig.generatorConfig;
-    Generator *embedGen = buildGenerator(embedGenConfig);
-    if (!embedGen) {
-        qWarning() << "RAGBot::processQuestion(): No valid embedding generator";
-        return;
-    }
 
-    QVector<float> queryEmb = embedGen->generate(question);
-    delete embedGen;
+    auto results = m_embedder.textResults(question, 10);
 
-    if (queryEmb.isEmpty()) {
-        qWarning() << "RAGBot::processQuestion(): Failed to generate query embedding";
-        return;
-    }
-    
-    auto results = m_embed_db.search(queryEmb, 10);
-    
     if (results.isEmpty()) {
-        qDebug() << "RAGBot::processQuestio(): No relevant documents found";
+        qDebug() << "RAGBot::processQuestion(): No relevant documents found";
         return;
     }
+
+    auto output = m_researcher.research(question, results);
     
     qDebug() << QString("RAGBot::processQuestion(): Found %1 relevant documents").arg(results.size());
     
@@ -202,6 +155,7 @@ void RAGBot::processQuestion(const QString &question)
     if (!m_conversation_db.logConversation(queryEmb, question, researchAnswer, roleplayAnswer)) {
         qWarning() << "RAGBot::processQuestion(): Failed to log conversation to database";
     }
+#endif
 }
 
 

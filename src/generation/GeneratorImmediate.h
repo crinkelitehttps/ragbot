@@ -3,7 +3,6 @@
 #include <QByteArray>
 
 #include "Generator.h"
-#include "../config/ConfigGenerator.h"
 #include <QDir>
 
 #include "llama.h"
@@ -17,17 +16,18 @@
 class GeneratorImmediate : public virtual Generator 
 {
 public:
-    GeneratorImmediate(ConfigGenerator& generatorConfig);
+    GeneratorImmediate(const QJsonObject& config);
     ~GeneratorImmediate() override;
 
     bool isValid() override;
+
     QVector<float> generate(const QString& data) override;
+
     QString generateText(
             QString& systemMessage,
             QString& prompt,
             bool isStream) override;
     
-    ConfigGenerator m_config;
     llama_context *m_embedCtx;
     llama_model *m_embedModel;
 };

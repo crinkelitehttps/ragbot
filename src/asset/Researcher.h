@@ -2,20 +2,19 @@
 #ifndef RESEARCHER_H
 #define RESEARCHER_H
 
-#include "../config/ConfigResearch.h"
 #include "../db/EmbeddingDatabase.h"
+#include "../generation/Generator.h"
+#include "../asset/Embedder.h"
 
 class Researcher
 {
 public:
-    Researcher(const ConfigResearch &researcherConfig)
-       : m_config(researcherConfig) 
-    {
-        qDebug() << "Research()";
-    };
+    Researcher(const QJsonObject& config);
+    QString research(const QString& question, QVector<EmbeddingDatabase::SearchResult>& results);
 
 private:
-    ConfigResearch m_config;
+    Embedder* m_embedder;
+    Generator* m_generator;
 };
 
 #endif // RESEARCHER_H

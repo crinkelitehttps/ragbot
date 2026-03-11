@@ -1,5 +1,4 @@
 #include "GeneratorImmediate.h"
-#include "../config/ConfigGenerator.h"
 #include <QJsonObject>
 #include <QDir>
 #include <QDebug>
@@ -7,9 +6,8 @@
 #include "common.h" // Required for common_tokenize, common_batch_add, etc.
 
 //--------------------------------------------------------------------------------
-GeneratorImmediate::GeneratorImmediate(ConfigGenerator& generatorConfig) 
-    : Generator(generatorConfig)
-    , m_config(generatorConfig)
+GeneratorImmediate::GeneratorImmediate(const QJsonObject& config) 
+    : Generator(config)
 {
     // Initialize backend once
     static bool backend_initialized = false;

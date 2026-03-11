@@ -14,23 +14,38 @@
 
 
 //--------------------------------------------------------------------------------
-Embedder::Embedder(ConfigEmbed config)
-    : m_config(config)
-    , m_embedDB("embeddings.db")
-    , m_generator(initGenerator())
+Embedder::Embedder(const QJsonObject& config)
+    : m_db(new EmbeddingDatabase(config))
     , m_parser(new ParserJSON())
+    , m_files(config.value("files").toString())
+    , m_isValid(true)
 {
-    qDebug() << "Embedder::Embedder()";
+    qDebug() << "Embedder::Embedder()" << m_files;
 
-//    QString jsonDir = QDir::homePath() + "/source/Cataclysm-DDA/data/json";
-    QString jsonDir = QFileInfo(config.sourceFiles).isAbsolute()
-        ? config.sourceFiles
-        : QDir::homePath() + config.sourceFiles;
-    if (!QDir(jsonDir).exists()) {
-        qCritical() << "Embedder::Embedder(): JSON directory not found:" << jsonDir;
+    if (config.isEmpty()) {
+        qDebug() << "Embedder::Embedder() [ no valid config ]";
+        return;
     }
-    m_config.sourceFiles = jsonDir;
-    processAllFiles();
+
+    const auto& name = config.value("name").toString();
+    if (name.isEmpty()) {
+        qWarning() << "Embedder::Embedder() [ invalid config ]";
+    }
+    
+    const auto generatorConfig = config.value("generator").toObject();
+
+    if (config.value("isNetworkHost").toBool()) {
+        m_generator = new GeneratorIP(generatorConfig);
+    } else {
+        m_generator = new GeneratorImmediate(generatorConfig);
+    }
+
+    if (m_generator) {
+        processAllFiles();
+        return;
+    }
+
+    qWarning() << "Embedder::Embedder() [ failed to create the generator ]";
 }
 
 
@@ -40,7 +55,7 @@ void Embedder::processAllFiles()
     int total = 0, processed = 0;
     
     QDirIterator countIt(
-            m_config.sourceFiles,
+            m_files,
             QStringList()
             << "*.json",
             QDir::Files,
@@ -55,7 +70,7 @@ void Embedder::processAllFiles()
     qDebug() << "Embedder::processAllFiles(): Found" << total << "JSON files";
     
     QDirIterator it(
-            m_config.sourceFiles,
+            m_files,
             QStringList()
             << "*.json",
             QDir::Files,
@@ -73,7 +88,7 @@ void Embedder::processAllFiles()
             .arg(fileInfo.fileName());
         
 
-        embedFile(filePath);
+        fileEmbed(filePath);
     }
     
     qDebug() << "Embedder::processAllFiles(): Complete! Processed" 
@@ -84,34 +99,9 @@ void Embedder::processAllFiles()
 
 
 //--------------------------------------------------------------------------------
-Generator* Embedder::initGenerator()
+void Embedder::fileEmbed(const QString &sourcePath) 
 {
-    auto driverLoaded = [](Generator* generator) {
-        if (generator->isValid() ) {
-            return generator;
-        }
-        delete generator;
-        return static_cast<Generator*>(nullptr);
-    };
-
-    if (auto* generator = driverLoaded(new GeneratorImmediate(m_config.generatorConfig))) {
-        qDebug() << "Embedder::initGenerator() [ GeneratorImmediate ]";
-        return generator;
-    }
-    if (auto* generator = driverLoaded(new GeneratorIP(m_config.generatorConfig))) {
-        qDebug() << "Embedder::initGenerator() [ GeneratorIP ]";
-        return generator;
-    }
-    qDebug() << "Embedder::initGenerator() [ nullptr ]";
-
-    return static_cast<Generator*>(nullptr);
-}; 
-
-
-//--------------------------------------------------------------------------------
-void Embedder::embedFile(const QString &sourcePath) 
-{
-    if (m_embedDB.isEmbedded(sourcePath)) {
+    if (m_db->isEmbedded(sourcePath)) {
         qDebug() << "Embedder::embedFile() already embedded" << sourcePath;
         return;
     };
@@ -122,7 +112,7 @@ void Embedder::embedFile(const QString &sourcePath)
         const auto fileChunks = m_parser->toChunks(sourceFile.readAll());
         for (const auto &chunk : fileChunks) {
             const auto embedding = m_generator->generate(chunk);
-            if(m_embedDB.saveEmbedding(embedding, sourcePath, chunk)) {
+            if(m_db->saveEmbedding(embedding, sourcePath, chunk)) {
                 qDebug() << "Embedder::embedderFile() [ saveEmbeeding returned true ]";
                 return;
             };
@@ -133,4 +123,5 @@ void Embedder::embedFile(const QString &sourcePath)
     };
 
 };
+
 

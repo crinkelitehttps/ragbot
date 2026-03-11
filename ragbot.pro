@@ -10,6 +10,7 @@ SOURCES += \
     src/main.cpp \
     src/RAGBot.cpp \
     src/asset/Embedder.cpp \
+    src/asset/Researcher.cpp \
     src/db/EmbeddingDatabase.cpp \
     src/db/RoleplayDatabase.cpp \
     src/generation/GeneratorImmediate.cpp \

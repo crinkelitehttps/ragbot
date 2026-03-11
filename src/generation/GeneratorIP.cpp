@@ -6,9 +6,10 @@
 
 
 //--------------------------------------------------------------------------------
-GeneratorIP::GeneratorIP(ConfigGenerator& generatorConfig)
-       : Generator(generatorConfig)
-       , m_config(generatorConfig) 
+GeneratorIP::GeneratorIP(const QJsonObject& config)
+    : Generator(config.value("generator").toObject())
+    , m_modelPath(config.value("modelPath").toString())
+    , m_timeout(1000)
 {
 };
 
@@ -30,9 +31,9 @@ QVector<float> GeneratorIP::generate(const QString& data)
     }
 
     QNetworkRequest netRequest;
-    netRequest.setUrl(QUrl(m_config.basePath+ "v1/embeddings"));
+    netRequest.setUrl(QUrl(m_modelPath + "v1/embeddings"));
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    netRequest.setTransferTimeout(m_config.timeout);
+    netRequest.setTransferTimeout(m_timeout);
 
     qDebug().noquote() << "GenreatorIP::generate size" << sizeof(data) << data.length();
 
@@ -51,7 +52,7 @@ QVector<float> GeneratorIP::generate(const QString& data)
 
     QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
 
-    timer.start(m_config.timeout);
+    timer.start(m_timeout);
     loop.exec();
 
     const auto parse = [] (QByteArray &responseData, QVector<float>& embedding)  {
@@ -106,7 +107,7 @@ QString GeneratorIP::generateText(
     ) 
 {
     QJsonObject request;
-    request["model"] = m_config.modelName;
+    request["model"] = m_modelPath;
     request["stream"] = isStream;
     
     QJsonArray messages;
@@ -133,10 +134,10 @@ QString GeneratorIP::generateText(
     QByteArray jsonData = doc.toJson();
     
     QNetworkRequest netRequest;
-    netRequest.setUrl(QUrl(m_config.basePath+ "/chat/completions"));
+    netRequest.setUrl(QUrl(m_modelPath + "/chat/completions"));
 
     netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    netRequest.setTransferTimeout(m_config.timeout);
+    netRequest.setTransferTimeout(m_timeout);
     
     QNetworkReply *reply = m_network.post(netRequest, jsonData);
     
@@ -146,7 +147,7 @@ QString GeneratorIP::generateText(
     QTimer timer;
     timer.setSingleShot(true);
     QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timer.start(m_config.timeout);
+    timer.start(m_timeout);
     
     if (isStream) {
         QString fullResponse;

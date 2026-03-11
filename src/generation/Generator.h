@@ -4,7 +4,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include "../config/ConfigGenerator.h"
 
 class Generator 
 {
@@ -22,7 +21,7 @@ public:
     virtual bool isValid() = 0;
 
 protected:
-    Generator(ConfigGenerator&) {}
+    Generator(const QJsonObject&) {}
 };
 
 #endif // GENERATOR_H

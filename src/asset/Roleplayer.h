@@ -10,11 +10,10 @@
 class Roleplayer
 {
 public:
-    Roleplayer(const ConfigRoleplay &roleplayerConfig) : m_config(roleplayerConfig) {};
-
-private:
-    ConfigRoleplay m_config;
-    RoleplayDatabase m_roleplay_db;
+    Roleplayer(const QJsonObject& config) 
+    {
+        Q_UNUSED(config)
+    };
 };
 
 #endif // ROLEPLAYER_H
