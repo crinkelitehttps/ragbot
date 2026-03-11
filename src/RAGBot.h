@@ -1,9 +1,6 @@
 #ifndef RAGBOT_H
 #define RAGBOT_H
 
-#include <QString>
-#include <QVector>
-
 #include "asset/Embedder.h"
 #include "asset/Researcher.h"
 #include "asset/Roleplayer.h"
@@ -11,11 +8,11 @@
 class RAGBot
 {
 public:
-    RAGBot(Embedder embedder, Researcher researcher, Roleplayer roleplayer);
+    RAGBot(const Embedder& embedder, const Researcher& researcher, const Roleplayer& roleplayer);
     ~RAGBot() { qDebug() << "~RAGBot()"; }
-    void init();
+    void start();
 private:
-    void cleanup();
+
     void processQuestion(const QString &question);
 
     Embedder m_embedder;

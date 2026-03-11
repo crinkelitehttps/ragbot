@@ -125,3 +125,8 @@ void Embedder::fileEmbed(const QString &sourcePath)
 };
 
 
+//--------------------------------------------------------------------------------
+void Embedder::generationEmbed(const QString &generation)
+{
+    qDebug() << "Embedder::generationEmbed() [ not implemented ]" << generation.length(); 
+};

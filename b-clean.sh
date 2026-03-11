@@ -8,5 +8,5 @@ qmake ../ragbot
 
 echo "running make"
 
-make -j$(nproc)
+bear -- make -j$(nproc)
 cd $CODE_DIR

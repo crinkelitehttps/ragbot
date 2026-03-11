@@ -16,7 +16,7 @@ class EmbeddingDatabase
 private:
    struct FaissDeleter {
        void operator()(FaissIndex* index) const {
-           if (index) {
+           if (index != nullptr) {
                faiss_Index_free(index);
            }
        }
@@ -30,7 +30,6 @@ public:
     };
 
     EmbeddingDatabase(const QJsonObject& embedConfig) 
-        : m_db()
     {
         const auto databaseName = embedConfig.value("databaseName").toString();
         if (!databaseName.isEmpty()) {
@@ -38,31 +37,30 @@ public:
         }
     };
  
-    bool isEmbedded(const QString& sourceFile);
+    auto isEmbedded(const QString& sourceFile) -> bool ;
 
-    bool saveEmbedding(
+    auto saveEmbedding(
         const QVector<float> &embedding,
         const QString &sourcePath,
         const QString &helperContext
-    );
+    ) -> bool ;
 
-    QVector<SearchResult> search(
-        const QVector<float> &queryEmbedding,
-        const int topK = 10
-    );
+    static constexpr int DefaultTopK = 10;
+    auto search(
+        QVector<float> &queryEmbedding,
+        int topK = DefaultTopK 
+    ) -> QVector<SearchResult>;
 
-    QVector<SearchResult> textResults(
+    auto textResults(
         const QString& queryEmbedding,
-        const int topK = 10
-    );
+        int topK = DefaultTopK
+    ) -> QVector<SearchResult>;
 
     void loadExistingEmbeddings();
 
 private:
-    QByteArray fileChecksum(const QString& filename); 
+    auto fileChecksum(const QString& filename) -> QByteArray; 
     void initialize(const QString& dbName);
-
-private:
     std::unique_ptr<FaissIndex, FaissDeleter> m_index;
     const static int m_dimensions { 768 };
     QSqlDatabase m_db;

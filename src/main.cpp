@@ -11,7 +11,7 @@
 
 #include "RAGBot.h"
 
-int main(int argc, char *argv[])
+auto main(int argc, char *argv[]) -> int
 {
     QCoreApplication app(argc, argv);
 
@@ -42,12 +42,12 @@ int main(int argc, char *argv[])
         Roleplayer roleplayer(root.value("roleplayer").toObject());
         qDebug() << "main roleplayer object";
         RAGBot ragbot(embedder, researcher, roleplayer);
-        QTimer::singleShot(0, [&ragbot]() {
-            ragbot.init();
+        QTimer::singleShot(0, [&ragbot] () -> void {
+            ragbot.start();
         });
     }
     configFile.close();
-    return app.exec();
+    return 0;
 }
 
 

@@ -10,7 +10,11 @@ class Researcher
 {
 public:
     Researcher(const QJsonObject& config);
-    QString research(const QString& question, QVector<EmbeddingDatabase::SearchResult>& results);
+
+    auto research(
+        const QString& question,
+        QVector<EmbeddingDatabase::SearchResult>& results
+    ) -> QString;
 
 private:
     Embedder* m_embedder;

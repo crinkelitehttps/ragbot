@@ -5,7 +5,7 @@
 #include "RAGBot.h"
 
 //--------------------------------------------------------------------------------
-RAGBot::RAGBot(Embedder embedder, Researcher researcher, Roleplayer roleplayer)
+RAGBot::RAGBot(const Embedder& embedder, const Researcher& researcher, const Roleplayer& roleplayer)
     : m_embedder(embedder)
     , m_researcher(researcher)
     , m_roleplayer(roleplayer)
@@ -14,13 +14,13 @@ RAGBot::RAGBot(Embedder embedder, Researcher researcher, Roleplayer roleplayer)
 }
 
 //--------------------------------------------------------------------------------
-void RAGBot::init()
+void RAGBot::start()
 {
-    QTextStream in(stdin);
+    QTextStream tin(stdin);
 
     while (true) {
         QTextStream(stdout) << "\nYou: " << Qt::flush;
-        QString question = in.readLine().trimmed();
+        QString question = tin.readLine().trimmed();
         
         if (question.isEmpty()) continue;
         if (question.toLower() == "quit" || question.toLower() == "exit") {
@@ -30,7 +30,6 @@ void RAGBot::init()
         processQuestion(question);
     }
     
-    cleanup();
     QCoreApplication::quit();
 }
 
@@ -40,7 +39,11 @@ void RAGBot::processQuestion(const QString &question)
 {
     qDebug() << "RAGBot::processQuestion(): " << question;
 
-#if 0
+    ///m_researcher.research(question, m_embedder.queryResults(question));
+    m_embedder.generationEmbed("placeholder");
+
+
+#if DEBUG_DISABLED
     const auto truncateTo = [](const QString &text, int maxChars) {
         if (maxChars <= 0 || text.size() <= maxChars) {
             return text;
@@ -159,19 +162,3 @@ void RAGBot::processQuestion(const QString &question)
 }
 
 
-//--------------------------------------------------------------------------------
-void RAGBot::cleanup()
-{
-    qDebug() << "RAGBot::cleanup()";
-#if 0
-    if (m_embedCtx) {
-        llama_free(m_embedCtx);
-        m_embedCtx = nullptr;
-    }
-    if (m_embedModel) {
-        llama_model_free(m_embedModel);
-        m_embedModel = nullptr;
-    }
-    llama_backend_free();
-#endif
-}
