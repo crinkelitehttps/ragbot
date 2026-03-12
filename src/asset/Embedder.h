@@ -18,13 +18,14 @@ public:
 
     ~Embedder() = default;
 
-    void generationEmbed(const QString& generation);
     auto queryResults(const QString& query) -> QString;
 
     void processAllFiles();
     void fileEmbed(const QString& sourcePath);
     auto textVectors() -> QVector<float>&;
     [[nodiscard]] auto isValid() const -> bool { return m_isValid; }
+    
+    static auto generationEmbed(const QString& generation) -> void;
 
 private:
     EmbeddingDatabase* m_db;

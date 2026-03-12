@@ -19,17 +19,23 @@ public:
     GeneratorImmediate(const QJsonObject& config);
     ~GeneratorImmediate() override;
 
-    bool isValid() override;
+    [[nodiscard]] auto isValid() const -> bool override { return m_isValid; };
 
-    QVector<float> generate(const QString& data) override;
+    [[nodiscard]] auto generate(const QString& data) -> QVector<float> override;
 
-    QString generateText(
-            QString& systemMessage,
-            QString& prompt,
-            bool isStream) override;
+    auto generateText(
+            SystemPrompt& systemPrompt,
+            Prompt& prompt,
+            bool isStream) -> QString override;
+private:
+    static constexpr int DefaultMaxTokenGen { 512 };
+    static constexpr int DefaultBufferLength { 128 };
+    static constexpr int DefaultBatch { 2048 };
+    static constexpr int DefaultCtx { 2048 };
     
     llama_context *m_embedCtx;
     llama_model *m_embedModel;
+    bool m_isValid;
 };
 
 #endif // GENERATORIMMEDIATE_H

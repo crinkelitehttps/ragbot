@@ -39,31 +39,31 @@ public:
  
     auto isEmbedded(const QString& sourceFile) -> bool ;
 
+    struct SourcePath { QString value; };
+    struct HelperContext { QString value; };
+
     auto saveEmbedding(
         const QVector<float> &embedding,
-        const QString &sourcePath,
-        const QString &helperContext
-    ) -> bool ;
-
-    static constexpr int DefaultTopK = 10;
-    auto search(
-        QVector<float> &queryEmbedding,
-        int topK = DefaultTopK 
-    ) -> QVector<SearchResult>;
+        const SourcePath &sourcePath,
+        const HelperContext &helperContext
+    ) -> bool;
 
     auto textResults(
-        const QString& queryEmbedding,
+        const QVector<float>& queryEmbedding,
         int topK = DefaultTopK
     ) -> QVector<SearchResult>;
 
-    void loadExistingEmbeddings();
-
 private:
-    auto fileChecksum(const QString& filename) -> QByteArray; 
+    void loadExistingEmbeddings();
+    static auto fileChecksum(const QString& filename) -> QByteArray; 
+
     void initialize(const QString& dbName);
     std::unique_ptr<FaissIndex, FaissDeleter> m_index;
-    const static int m_dimensions { 768 };
     QSqlDatabase m_db;
+
+    const static int m_dimensions { 768 };
+    static constexpr int DefaultTopK { 10 };
+    static constexpr float L2ToCosineDenominator { 2.0F };
 };
 
 #endif // EMBEDDINGDATABASE_H

@@ -40,7 +40,7 @@ Embedder::Embedder(const QJsonObject& config)
         m_generator = new GeneratorImmediate(generatorConfig);
     }
 
-    if (m_generator) {
+    if (m_generator != nullptr) {
         processAllFiles();
         return;
     }
@@ -52,7 +52,8 @@ Embedder::Embedder(const QJsonObject& config)
 //--------------------------------------------------------------------------------
 void Embedder::processAllFiles()
 {
-    int total = 0, processed = 0;
+    int total = 0;
+    int processed = 0;
     
     QDirIterator countIt(
             m_files,
@@ -69,7 +70,7 @@ void Embedder::processAllFiles()
     
     qDebug() << "Embedder::processAllFiles(): Found" << total << "JSON files";
     
-    QDirIterator it(
+    QDirIterator dIt(
             m_files,
             QStringList()
             << "*.json",
@@ -77,8 +78,8 @@ void Embedder::processAllFiles()
             QDirIterator::Subdirectories
     );
     
-    while (it.hasNext()) {
-        QString filePath = it.next();
+    while (dIt.hasNext()) {
+        QString filePath = dIt.next();
         QFileInfo fileInfo(filePath);
         
         processed++;
@@ -112,10 +113,12 @@ void Embedder::fileEmbed(const QString &sourcePath)
         const auto fileChunks = m_parser->toChunks(sourceFile.readAll());
         for (const auto &chunk : fileChunks) {
             const auto embedding = m_generator->generate(chunk);
+#if DEBUG_DISABLE
             if(m_db->saveEmbedding(embedding, sourcePath, chunk)) {
                 qDebug() << "Embedder::embedderFile() [ saveEmbeeding returned true ]";
                 return;
             };
+#endif
         };
         sourceFile.close();
     } else {
@@ -126,7 +129,7 @@ void Embedder::fileEmbed(const QString &sourcePath)
 
 
 //--------------------------------------------------------------------------------
-void Embedder::generationEmbed(const QString &generation)
+auto Embedder::generationEmbed(const QString &generation) -> void
 {
     qDebug() << "Embedder::generationEmbed() [ not implemented ]" << generation.length(); 
 };

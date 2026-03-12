@@ -8,20 +8,25 @@
 class Generator 
 {
 public:
+    struct SystemPrompt { QString value; };
+    struct Prompt{ QString value; };
+
     virtual ~Generator() = default;
 
-    virtual QVector<float> generate(const QString& data) = 0;
+    virtual auto generate(const QString& data) -> QVector<float> = 0;
 
-    virtual QString generateText(
-            QString& systemPrompt,
-            QString& prompt,
+    virtual auto generateText(
+            SystemPrompt& systemPrompt,
+            Prompt& prompt,
             bool isStream
-    ) = 0;
+    ) -> QString = 0;
 
-    virtual bool isValid() = 0;
+    [[nodiscard]] virtual auto isValid() const -> bool = 0;
 
 protected:
-    Generator(const QJsonObject&) {}
+    Generator(const QJsonObject& config) { Q_UNUSED(config) }
+    static constexpr float DefaultTemp { 0.7 };
+    static constexpr float DefaultMaxTokens { 2000 };
 };
 
 #endif // GENERATOR_H
