@@ -13,7 +13,7 @@ public:
 
     virtual ~Generator() = default;
 
-    virtual auto generate(const QString& data) -> QVector<float> = 0;
+    virtual auto generate(const QByteArray& data) -> QVector<float> = 0;
 
     virtual auto generateText(
             SystemPrompt& systemPrompt,

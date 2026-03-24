@@ -1,13 +1,15 @@
 #ifndef EMBEDDINGDATABASE_H
 #define EMBEDDINGDATABASE_H
 
+#include <QFile>
+#include <QJsonObject>
+#include <QSqlDatabase>
 #include <QString>
 #include <QVector>
-#include <QSqlDatabase>
 #include <faiss_c.h>
 #include <Index_c.h>
 #include <IndexFlat_c.h>
-#include "../generation/Generator.h"
+
 
 
 class EmbeddingDatabase
@@ -25,6 +27,7 @@ private:
 public:
     struct SearchResult {
         QString sourceFile;
+        QString content;
         QString itemId;
         float similarity;
     };
@@ -37,25 +40,25 @@ public:
         }
     };
  
-    auto isEmbedded(const QString& sourceFile) -> bool ;
+    auto newSourceFileId(const QByteArray& contentChecksum) -> int;
 
-    struct SourcePath { QString value; };
-    struct HelperContext { QString value; };
-
-    auto saveEmbedding(
-        const QVector<float> &embedding,
-        const SourcePath &sourcePath,
-        const HelperContext &helperContext
+    auto embeddingSave(
+        const QVector<float>& chunkVector,
+        const QByteArray& chunkContent,
+        int chunkContextId 
     ) -> bool;
 
     auto textResults(
         const QVector<float>& queryEmbedding,
         int topK = DefaultTopK
     ) -> QVector<SearchResult>;
+    
+#if DEBUG_DISABLED
+    static auto chunkId(const QString& data) -> QByteArray; 
+#endif
 
 private:
     void loadExistingEmbeddings();
-    static auto fileChecksum(const QString& filename) -> QByteArray; 
 
     void initialize(const QString& dbName);
     std::unique_ptr<FaissIndex, FaissDeleter> m_index;

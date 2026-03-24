@@ -13,11 +13,11 @@ public:
     void start();
 private:
 
-    void processQuestion(const QString &question);
+    auto processQuestion(const QString &question) -> void;
 
-    Embedder m_embedder;
-    Researcher m_researcher;
-    Roleplayer m_roleplayer;
+    const Embedder& m_embedder;
+    const Researcher& m_researcher;
+    const Roleplayer& m_roleplayer;
 };
 
 #endif // RAGBOT_H

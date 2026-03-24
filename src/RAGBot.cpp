@@ -35,12 +35,12 @@ void RAGBot::start()
 
 
 //--------------------------------------------------------------------------------
-void RAGBot::processQuestion(const QString &question)
+auto  RAGBot::processQuestion(const QString &question) -> void
 {
     qDebug() << "RAGBot::processQuestion(): " << question;
 
     ///m_researcher.research(question, m_embedder.queryResults(question));
-    m_embedder.generationEmbed("placeholder");
+    // m_embedder.generationEmbed("placeholder");
 
 
 #if DEBUG_DISABLED

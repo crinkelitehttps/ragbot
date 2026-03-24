@@ -9,7 +9,7 @@ class Parser
 {
 public:
     virtual ~Parser() = default;
-    virtual const QStringList toChunks(const QByteArray& value) = 0;
+    virtual auto bytesChunks(const QByteArray& value) -> QByteArrayList = 0;
 
 protected:
     Parser() {}

@@ -2,13 +2,11 @@
 #include <cmath>
 #include <QDebug>
 #include <QFile>
-#include <QCryptographicHash>
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QVariant>
 
-// Helper to normalize vectors for Cosine Similarity using L2 Index
-void normalizeVector(float* data, int dim) {
+auto normalizeVector(float* data, int dim) -> void {
     float norm = 0.0F;
     for (int i = 0; i < dim; i++) norm += data[i] * data[i];
     if (norm <= 0) return;
@@ -18,7 +16,7 @@ void normalizeVector(float* data, int dim) {
 
 
 //--------------------------------------------------------------------------------
-void EmbeddingDatabase::initialize(const QString& dbName)
+auto EmbeddingDatabase::initialize(const QString& dbName) -> void
 {
     m_db = QSqlDatabase::addDatabase("QSQLITE", "embeddings_connection");
     m_db.setDatabaseName(dbName);
@@ -71,6 +69,7 @@ void EmbeddingDatabase::initialize(const QString& dbName)
 
     // 1. Prepare Query Vector
     QVector<float> normalizedQuery = queryEmbedding;
+
     normalizeVector(normalizedQuery.data(), m_dimensions);
 
     // 2. Search FAISS
@@ -112,6 +111,7 @@ void EmbeddingDatabase::initialize(const QString& dbName)
 #if DEBUG_DISABLE
             res.content = query.value(0).toString();
 #endif
+            res.content = query.value(0).toString();
             res.sourceFile = query.value(1).toString();
             // L2 to Cosine approx: 1 - (d^2 / 2)
             res.similarity = 1.0F - (distances[i] / 2.0F); 
@@ -122,50 +122,61 @@ void EmbeddingDatabase::initialize(const QString& dbName)
     return results;
 }
 
+    //query.exec(R"(
+    //    CREATE TABLE IF NOT EXISTS chunks (
+    //        faiss_id INTEGER PRIMARY KEY,
+    //        source_id INTEGER NOT NULL,
+    //        content TEXT NOT NULL,
+    //        FOREIGN KEY (source_id) REFERENCES sources(id)
+    //    );
+    //)");
 
 //--------------------------------------------------------------------------------
-auto EmbeddingDatabase::saveEmbedding(
-    const QVector<float> &embedding,
-    const SourcePath &sourcePath,
-    const HelperContext &helperContext
+auto EmbeddingDatabase::embeddingSave(
+    const QVector<float>& chunkVector,
+    const QByteArray& chunkContent,
+    int chunkContextId
 ) -> bool
 {
-    if (embedding.size() != m_dimensions) return false;
+    if (chunkVector.size() != m_dimensions) return false;
 
-    const QByteArray fcs = fileChecksum(sourcePath.value);
+    Q_UNUSED(chunkContextId);
+    Q_UNUSED(chunkContent);
+
     int sourceId = -1;
 
     QSqlQuery query(m_db);
-    query.prepare("SELECT id FROM sources WHERE Sha256 = ?");
-    query.addBindValue(fcs);
     
-    if (query.exec() && query.next()) {
-        sourceId = query.value(0).toInt();
-    } else {
-        query.prepare("INSERT INTO sources (Sha256, source_file) VALUES (?, ?)");
-        query.addBindValue(fcs);
-        query.addBindValue(sourcePath.value);
-        if (!query.exec()) return false;
-        sourceId = query.lastInsertId().toInt();
-    }
+    if (!query.exec()) {
+        qWarning() << "EmbeddingDatabase::saveEmbedding():" << query.lastError();
+    };
+
+    query.prepare("INSERT INTO sources (Sha256, source_file) VALUES (?, ?)");
+    query.addBindValue(chunkId);
+    query.addBindValue(chunk);
+
+    if (!query.exec()) {
+        qWarning() << "EmbeddingDatabase::saveEmbedding():" << query.lastError();
+        return false;
+    };
+
+    sourceId = query.lastInsertId().toInt();
 
     auto currentFaissId = faiss_Index_ntotal(m_index.get());
-    QVector<float> normalizedEmb = embedding;
-    normalizeVector(normalizedEmb.data(), m_dimensions);
 
-    faiss_Index_add(m_index.get(), 1, normalizedEmb.constData());
+    faiss_Index_add(m_index.get(), 1, data);
 
     query.prepare("INSERT INTO chunks (faiss_id, source_id, content) VALUES (?, ?, ?)");
     query.addBindValue(static_cast<qlonglong>(currentFaissId));
     query.addBindValue(sourceId);
-    query.addBindValue(helperContext.value);
+    query.addBindValue(helperContext);
 
     return query.exec();
 }
 
 
 //--------------------------------------------------------------------------------
-void EmbeddingDatabase::loadExistingEmbeddings()
+auto EmbeddingDatabase::loadExistingEmbeddings() -> void
 {
     if (!m_index) return;
 
@@ -199,28 +210,28 @@ void EmbeddingDatabase::loadExistingEmbeddings()
     qDebug() << "Warm Start complete. Loaded" << count << "embeddings into FAISS.";
 }
 
-
+#if DEBUG_DISABLE
 //--------------------------------------------------------------------------------
-auto EmbeddingDatabase::fileChecksum(const QString &fileName) -> QByteArray
+auto EmbeddingDatabase::chunkId(const QString& data) -> QByteArray
 {
-    QFile file(fileName);
-    if (!file.open(QFile::ReadOnly)) return {};
-    
     QCryptographicHash hash(QCryptographicHash::Sha256);
-    if (hash.addData(&file)) return hash.result().toHex();
-    
-    return {};
+    hash.addData(data.toUtf8());
+    return hash.result().toHex();
 }
+#endif
 
 
 //--------------------------------------------------------------------------------
-auto EmbeddingDatabase::isEmbedded(const QString& sourceFile) -> bool 
+auto EmbeddingDatabase::newSourceFileId(const QByteArray& contentChecksum) -> int
 {
     QSqlQuery check(m_db);
-    check.prepare("SELECT 1 FROM sources WHERE Sha256 = ? LIMIT 1");
-    check.addBindValue(fileChecksum(sourceFile));
-    
-    return check.exec() && check.next();
+    check.prepare("SELECT source_file_id FROM sources WHERE Sha256 = ? LIMIT 1");
+    check.addBindValue(contentChecksum);
+
+    if(check.exec() && check.next()) {
+        return check.value(0).toInt() ;
+    };
+    return -1;
 }
 
 

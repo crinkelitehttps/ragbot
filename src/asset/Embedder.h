@@ -9,31 +9,37 @@
 
 class Embedder
 {
+public:
     struct SearchResult
     {
     };
 
-public:
+    struct SourceFile { QString value; };
+    struct HelperContext { QString value; };
+
     Embedder(const QJsonObject& embedderConfig);
 
     ~Embedder() = default;
 
-    auto queryResults(const QString& query) -> QString;
-
-    void processAllFiles();
-    void fileEmbed(const QString& sourcePath);
-    auto textVectors() -> QVector<float>&;
-    [[nodiscard]] auto isValid() const -> bool { return m_isValid; }
-    
+    auto processAllFiles() -> void;
+    auto fileEmbed(QFile& file) -> void;
     static auto generationEmbed(const QString& generation) -> void;
 
-private:
-    EmbeddingDatabase* m_db;
-    Generator* m_generator;
-    Parser* m_parser;
-    QString m_files;
-    bool m_isValid {};
+    [[nodiscard]] auto queryResults(const QString& query)
+        -> QString;
 
+    [[nodiscard]] auto isValid() const
+        -> bool { return m_isValid; }
+
+    [[nodiscard]] auto textVectors()
+        -> QVector<float>&;
+
+private:
+    EmbeddingDatabase m_db;
+    QString m_files;
+    Generator* m_generator {};
+    bool m_isValid {};
+    Parser* m_parser {};
 };
 
 #endif // EMBEDDER_H

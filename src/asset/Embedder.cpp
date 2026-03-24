@@ -15,10 +15,10 @@
 
 //--------------------------------------------------------------------------------
 Embedder::Embedder(const QJsonObject& config)
-    : m_db(new EmbeddingDatabase(config))
-    , m_parser(new ParserJSON())
+    : m_db(EmbeddingDatabase(config))
     , m_files(config.value("files").toString())
     , m_isValid(true)
+    , m_parser(new ParserJSON())
 {
     qDebug() << "Embedder::Embedder()" << m_files;
 
@@ -89,7 +89,8 @@ void Embedder::processAllFiles()
             .arg(fileInfo.fileName());
         
 
-        fileEmbed(filePath);
+        QFile file(filePath);
+        fileEmbed(file);
     }
     
     qDebug() << "Embedder::processAllFiles(): Complete! Processed" 
@@ -100,27 +101,26 @@ void Embedder::processAllFiles()
 
 
 //--------------------------------------------------------------------------------
-void Embedder::fileEmbed(const QString &sourcePath) 
+auto Embedder::fileEmbed(QFile& file) -> void
 {
-    if (m_db->isEmbedded(sourcePath)) {
-        qDebug() << "Embedder::embedFile() already embedded" << sourcePath;
-        return;
-    };
     
-    QFile sourceFile(sourcePath);
+    if (file.open(QIODevice::ReadOnly)) {
 
-    if (sourceFile.open(QIODevice::ReadOnly)) {
-        const auto fileChunks = m_parser->toChunks(sourceFile.readAll());
-        for (const auto &chunk : fileChunks) {
-            const auto embedding = m_generator->generate(chunk);
-#if DEBUG_DISABLE
-            if(m_db->saveEmbedding(embedding, sourcePath, chunk)) {
-                qDebug() << "Embedder::embedderFile() [ saveEmbeeding returned true ]";
-                return;
-            };
-#endif
+        const auto fileData = file.readAll();
+        QCryptographicHash hash(QCryptographicHash::Md5);
+        const auto fileHash = hash.result().toHex();
+
+        if (m_db.newSourceFileId(fileHash) < 0) {
+            qDebug() << "Embedder::fileEmbed() :" << fileHash << file.fileName();
+            return;
         };
-        sourceFile.close();
+
+        for (const auto &chunk : m_parser->bytesChunks(fileData)) {
+            const auto embedding = m_generator->generate(chunk);
+            m_db.saveEmbedding(embedding);
+        };
+
+        file.close();
     } else {
         qWarning() << "Embedder::embedderFile() [ saveEmbeeding returned false ]";
     };
