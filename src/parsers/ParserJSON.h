@@ -9,9 +9,9 @@
 class ParserJSON : public Parser
 {
 public:
-    ParserJSON();
+    ParserJSON() = default; 
 
-    const QStringList toChunks(const QByteArray& data) override;
+    auto toChunks(const QVariant& dataVariant) -> QStringList override;
 
 private:
     void extractTextRecursive(
@@ -20,6 +20,6 @@ private:
         const QString& prefix = QString()
     );
 
-    QString stringifyObject(const QJsonObject& obj);
+    auto stringifyObject(const QJsonObject& obj) -> QString ;
 };
 #endif // PARSERJSON_H

@@ -4,37 +4,43 @@
 #include <QJsonArray>
 #include <QDebug>
 
-ParserJSON::ParserJSON() {}
-
 
 //--------------------------------------------------------------------------------
-const QStringList ParserJSON::toChunks(const QByteArray &data)
+auto ParserJSON::toChunks(const QVariant &dataVariant) -> QStringList
 {
     QJsonParseError error;
-    QJsonDocument doc = QJsonDocument::fromJson(data, &error);
-    if (doc.isNull()) {
+
+    const auto dataObj = dataVariant.toJsonObject();
+
+    if (dataObj.isEmpty()) {
+        qWarning() << "ParserJSON::toChunks(): not an object";
+    };
+
+    const auto dataDocument = dataVariant.toJsonDocument();
+    if (dataDocument.isNull()) {
         qWarning() << "ParserJSON::toChunks(): failed to parse JSON:" << error.errorString();
         return {};
-    }
+    };
 
     QStringList chunks;
 
-    if (doc.isArray()) {
-        QJsonArray arr = doc.array();
-        for (const QJsonValue &val : arr) {
+    if (dataDocument.isArray()) {
+        QJsonArray arr = dataDocument.array();
+        for (const QJsonValueRef &val : arr) {
             if (val.isObject()) {
                 chunks.append(stringifyObject(val.toObject()));
             }
         }
-    } else if (doc.isObject()) {
-        chunks.append(stringifyObject(doc.object()));
+    } else if (dataDocument.isObject()) {
+        chunks.append(stringifyObject(dataDocument.object()));
     }
 
     return chunks;
 }
 
+
 //--------------------------------------------------------------------------------
-QString ParserJSON::stringifyObject(const QJsonObject& obj) 
+auto ParserJSON::stringifyObject(const QJsonObject& obj) -> QString
 {
     QStringList parts;
     
@@ -59,7 +65,7 @@ QString ParserJSON::stringifyObject(const QJsonObject& obj)
     return parts.join(" ");
 }
 
-#if 1
+#ifndef DEBUG_DISABLE
 //--------------------------------------------------------------------------------
 void ParserJSON::extractTextRecursive(const QJsonValue &value, QStringList &texts, const QString &prefix)
 {

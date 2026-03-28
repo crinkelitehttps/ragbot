@@ -24,9 +24,11 @@ public:
     [[nodiscard]] auto generate(const QString& data) -> QVector<float> override;
 
     auto generateText(
-            SystemPrompt& systemPrompt,
-            Prompt& prompt,
-            bool isStream) -> QString override;
+            QString& systemPrompt,
+            bool isStream,
+            QString& prompt
+        ) -> QString override;
+
 private:
     static constexpr int DefaultMaxTokenGen { 512 };
     static constexpr int DefaultBufferLength { 128 };

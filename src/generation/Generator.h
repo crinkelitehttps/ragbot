@@ -8,17 +8,14 @@
 class Generator 
 {
 public:
-    struct SystemPrompt { QString value; };
-    struct Prompt{ QString value; };
-
     virtual ~Generator() = default;
 
-    virtual auto generate(const QByteArray& data) -> QVector<float> = 0;
+    virtual auto generate(const QString& data) -> QVector<float> = 0;
 
     virtual auto generateText(
-            SystemPrompt& systemPrompt,
-            Prompt& prompt,
-            bool isStream
+            QString& systemPrompt,
+            bool isStream,
+            QString& prompt
     ) -> QString = 0;
 
     [[nodiscard]] virtual auto isValid() const -> bool = 0;

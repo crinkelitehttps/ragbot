@@ -28,34 +28,45 @@ auto EmbeddingDatabase::initialize(const QString& dbName) -> void
 
     QSqlQuery query(m_db);
 
+    // Enable foreign key enforcement (important in SQLite)
+    query.exec("PRAGMA foreign_keys = ON;");
+
+    // Sources table
     query.exec(R"(
         CREATE TABLE IF NOT EXISTS sources (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Sha256 TEXT UNIQUE NOT NULL,
-            source_file TEXT NOT NULL,
+            source_file_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sha256 TEXT UNIQUE NOT NULL,
+            source_file_path TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     )");
 
+    // Optional: explicit index (UNIQUE already creates one, but this is self-documenting)
+    query.exec(R"(
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_sha256
+        ON sources(sha256);
+    )");
+
+    // Chunks table
     query.exec(R"(
         CREATE TABLE IF NOT EXISTS chunks (
             faiss_id INTEGER PRIMARY KEY,
             source_id INTEGER NOT NULL,
             content TEXT NOT NULL,
-            FOREIGN KEY (source_id) REFERENCES sources(id)
+            FOREIGN KEY (source_id) REFERENCES sources(source_file_id)
+                ON DELETE CASCADE
         );
     )");
 
     FaissIndex* rawIndex = nullptr;
 
     // 0 means success in FAISS C API
-    if (faiss_IndexFlatL2_new_with(&rawIndex, m_dimensions) == 0) {
+    if (faiss_IndexFlatL2_new_with(&rawIndex, Dimensions) == 0) {
         m_index.reset(rawIndex);
         loadExistingEmbeddings();
     } else {
         qCritical() << "Failed to create FAISS index!";
     }
-    
 }
 
 
@@ -65,12 +76,12 @@ auto EmbeddingDatabase::initialize(const QString& dbName) -> void
         int topK
     ) -> QVector<EmbeddingDatabase::SearchResult>
 {
-    if (queryEmbedding.size() != m_dimensions || m_index == nullptr) return {};
+    if (queryEmbedding.size() != Dimensions || m_index == nullptr) return {};
 
     // 1. Prepare Query Vector
     QVector<float> normalizedQuery = queryEmbedding;
 
-    normalizeVector(normalizedQuery.data(), m_dimensions);
+    normalizeVector(normalizedQuery.data(), Dimensions);
 
     // 2. Search FAISS
     QVector<float> distances(topK);
@@ -108,13 +119,10 @@ auto EmbeddingDatabase::initialize(const QString& dbName) -> void
 
         if (query.exec() && query.next()) {
             SearchResult res;
-#if DEBUG_DISABLE
-            res.content = query.value(0).toString();
-#endif
             res.content = query.value(0).toString();
             res.sourceFile = query.value(1).toString();
             // L2 to Cosine approx: 1 - (d^2 / 2)
-            res.similarity = 1.0F - (distances[i] / 2.0F); 
+            res.similarity = 1.0F - (distances[i] / L2ToCosineDenominator); 
             results.append(res);
         }
     }
@@ -122,54 +130,30 @@ auto EmbeddingDatabase::initialize(const QString& dbName) -> void
     return results;
 }
 
-    //query.exec(R"(
-    //    CREATE TABLE IF NOT EXISTS chunks (
-    //        faiss_id INTEGER PRIMARY KEY,
-    //        source_id INTEGER NOT NULL,
-    //        content TEXT NOT NULL,
-    //        FOREIGN KEY (source_id) REFERENCES sources(id)
-    //    );
-    //)");
 
 //--------------------------------------------------------------------------------
 auto EmbeddingDatabase::embeddingSave(
+    int sourceId,
     const QVector<float>& chunkVector,
-    const QByteArray& chunkContent,
-    int chunkContextId
+    const QString& chunkContent
 ) -> bool
 {
-    if (chunkVector.size() != m_dimensions) return false;
+    if (chunkVector.size() != Dimensions) return false;
 
-    Q_UNUSED(chunkContextId);
-    Q_UNUSED(chunkContent);
-
-    int sourceId = -1;
+    Q_UNUSED(chunkContent); // will use
 
     QSqlQuery query(m_db);
-    
-    if (!query.exec()) {
-        qWarning() << "EmbeddingDatabase::saveEmbedding():" << query.lastError();
-    };
-
-    query.prepare("INSERT INTO sources (Sha256, source_file) VALUES (?, ?)");
-    query.addBindValue(chunkId);
-    query.addBindValue(chunk);
-
-    if (!query.exec()) {
-        qWarning() << "EmbeddingDatabase::saveEmbedding():" << query.lastError();
-        return false;
-    };
 
     sourceId = query.lastInsertId().toInt();
 
     auto currentFaissId = faiss_Index_ntotal(m_index.get());
 
-    faiss_Index_add(m_index.get(), 1, data);
+    faiss_Index_add(m_index.get(), 1, chunkVector.constData());
 
     query.prepare("INSERT INTO chunks (faiss_id, source_id, content) VALUES (?, ?, ?)");
     query.addBindValue(static_cast<qlonglong>(currentFaissId));
     query.addBindValue(sourceId);
-    query.addBindValue(helperContext);
+    query.addBindValue(chunkContent);
 
     return query.exec();
 }
@@ -196,11 +180,11 @@ auto EmbeddingDatabase::loadExistingEmbeddings() -> void
         const auto* data = reinterpret_cast<const float*>(bytes.constData());
         auto numElements = bytes.size() / sizeof(float);
 
-        if (numElements == m_dimensions) {
+        if (numElements == Dimensions) {
             // We must normalize because we are using L2 to simulate Cosine
             QVector<float> vec(static_cast<int>(numElements));
             memcpy(vec.data(), data, bytes.size());
-            normalizeVector(vec.data(), m_dimensions);
+            normalizeVector(vec.data(), Dimensions);
 
             faiss_Index_add(m_index.get(), 1, vec.constData());
             count++;
@@ -210,28 +194,66 @@ auto EmbeddingDatabase::loadExistingEmbeddings() -> void
     qDebug() << "Warm Start complete. Loaded" << count << "embeddings into FAISS.";
 }
 
-#if DEBUG_DISABLE
-//--------------------------------------------------------------------------------
-auto EmbeddingDatabase::chunkId(const QString& data) -> QByteArray
-{
-    QCryptographicHash hash(QCryptographicHash::Sha256);
-    hash.addData(data.toUtf8());
-    return hash.result().toHex();
-}
-#endif
+
+//query.exec("PRAGMA foreign_keys = ON;");
+
+//// Sources table
+//query.exec(R"(
+//    CREATE TABLE IF NOT EXISTS sources (
+//        source_file_id INTEGER PRIMARY KEY AUTOINCREMENT,
+//        sha256 TEXT UNIQUE NOT NULL,
+//        source_file_path TEXT NOT NULL,
+//        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+//    );
+//)");
+
+//// Optional: explicit index (UNIQUE already creates one, but this is self-documenting)
+//query.exec(R"(
+//    CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_sha256
+//    ON sources(sha256);
+//)");
+
+//// Chunks table
+//query.exec(R"(
+//    CREATE TABLE IF NOT EXISTS chunks (
+//        faiss_id INTEGER PRIMARY KEY,
+//        source_id INTEGER NOT NULL,
+//        content TEXT NOT NULL,
+//        FOREIGN KEY (source_id) REFERENCES sources(source_file_id)
+//            ON DELETE CASCADE
+//    );
+//)");
 
 
 //--------------------------------------------------------------------------------
-auto EmbeddingDatabase::newSourceFileId(const QByteArray& contentChecksum) -> int
+auto EmbeddingDatabase::newSourceFileId(const QByteArray& contentChecksum, const QString& file) -> int
 {
-    QSqlQuery check(m_db);
-    check.prepare("SELECT source_file_id FROM sources WHERE Sha256 = ? LIMIT 1");
-    check.addBindValue(contentChecksum);
+    QSqlQuery query(m_db);
 
-    if(check.exec() && check.next()) {
-        return check.value(0).toInt() ;
-    };
-    return -1;
+    // 1. Check if record already exists
+    query.prepare("SELECT source_file_id FROM sources WHERE sha256 = ? LIMIT 1");
+    query.addBindValue(contentChecksum.constData());
+
+    if (query.exec() && query.next()) {
+        qDebug() <<  "EmbeddingDatabase::newSourceFileId(): Record exists";
+        return -1;
+    }
+
+    // 2. Insert new record
+    QSqlQuery insert(m_db);
+
+    insert.prepare("INSERT INTO sources (sha256, source_file_path) VALUES (?, ?)");
+    insert.addBindValue(contentChecksum.constData());
+    insert.addBindValue(file);
+
+    if (!insert.exec()) {
+        qDebug() << "EmbeddingDatabase::newSourceFileId(): Insert failed" << insert.lastError();
+        Q_ASSERT(0);
+        return -1;
+    }
+
+    // 3. Return the newly created ID
+    return insert.lastInsertId().toInt();
 }
 
 

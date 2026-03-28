@@ -35,7 +35,7 @@ void RAGBot::start()
 
 
 //--------------------------------------------------------------------------------
-auto  RAGBot::processQuestion(const QString &question) -> void
+auto RAGBot::processQuestion(const QString &question) -> void
 {
     qDebug() << "RAGBot::processQuestion(): " << question;
 

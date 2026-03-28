@@ -113,14 +113,14 @@ GeneratorImmediate::~GeneratorImmediate()
 
 //--------------------------------------------------------------------------------
 auto GeneratorImmediate::generateText(
-        SystemPrompt& systemPrompt,
-        Prompt& prompt,
-        bool isStream
+        QString& systemPrompt,
+        bool isStream,
+        QString& prompt
     ) -> QString
 {
     if (!isValid()) return "Generator not initialized.";
 
-    QString fullPrompt = systemPrompt.value + "\n\n" + prompt.value;
+    QString fullPrompt = systemPrompt + "\n\n" + prompt;
     
     auto vtok = common_tokenize(m_embedCtx, fullPrompt.toStdString(), true, true);
     if (vtok.empty()) return "";

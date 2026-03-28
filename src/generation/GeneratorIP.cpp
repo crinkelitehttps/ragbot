@@ -124,16 +124,16 @@ auto GeneratorIP::parseStreamChunk(const QByteArray& data) -> QString {
 
 //--------------------------------------------------------------------------------
 auto GeneratorIP::generateText(
-    SystemPrompt& systemPrompt,
-    Prompt& prompt,
-    bool isStream
+    QString& systemPrompt,
+    bool isStream,
+    QString& prompt
 ) -> QString 
 {
     QJsonArray messages;
-    if (!systemPrompt.value.isEmpty()) {
-        messages.append(QJsonObject{{"role", "system"}, {"content", systemPrompt.value}});
+    if (!systemPrompt.isEmpty()) {
+        messages.append(QJsonObject{{"role", "system"}, {"content", systemPrompt}});
     }
-    messages.append(QJsonObject{{"role", "user"}, {"content", prompt.value}});
+    messages.append(QJsonObject{{"role", "user"}, {"content", prompt}});
 
     QJsonObject request{
         {"model", m_modelPath},

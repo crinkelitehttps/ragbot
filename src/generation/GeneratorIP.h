@@ -27,9 +27,9 @@ public:
     auto generate(const QString& data) -> QVector<float> override;
 
     auto generateText(
-            SystemPrompt& systemPrompt,
-            Prompt& prompt,
-            bool isStream
+            QString& systemPrompt,
+            bool isStream,
+            QString& prompt
     ) -> QString override;
 
     [[nodiscard]] auto isValid() const -> bool override { return m_isValid; };

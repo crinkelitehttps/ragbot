@@ -6,6 +6,7 @@
 #include <QSqlDatabase>
 #include <QString>
 #include <QVector>
+#include <QFileInfo>
 #include <faiss_c.h>
 #include <Index_c.h>
 #include <IndexFlat_c.h>
@@ -40,12 +41,12 @@ public:
         }
     };
  
-    auto newSourceFileId(const QByteArray& contentChecksum) -> int;
+    auto newSourceFileId(const QByteArray& contentChecksum, const QString& file) -> int;
 
     auto embeddingSave(
+        int sourceId,
         const QVector<float>& chunkVector,
-        const QByteArray& chunkContent,
-        int chunkContextId 
+        const QString& chunkContent
     ) -> bool;
 
     auto textResults(
@@ -53,10 +54,6 @@ public:
         int topK = DefaultTopK
     ) -> QVector<SearchResult>;
     
-#if DEBUG_DISABLED
-    static auto chunkId(const QString& data) -> QByteArray; 
-#endif
-
 private:
     void loadExistingEmbeddings();
 
@@ -64,7 +61,7 @@ private:
     std::unique_ptr<FaissIndex, FaissDeleter> m_index;
     QSqlDatabase m_db;
 
-    const static int m_dimensions { 768 };
+    static constexpr int Dimensions { 768 };
     static constexpr int DefaultTopK { 10 };
     static constexpr float L2ToCosineDenominator { 2.0F };
 };

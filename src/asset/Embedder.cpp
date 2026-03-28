@@ -107,20 +107,29 @@ auto Embedder::fileEmbed(QFile& file) -> void
     if (file.open(QIODevice::ReadOnly)) {
 
         const auto fileData = file.readAll();
+        const auto fileName = file.fileName();
         QCryptographicHash hash(QCryptographicHash::Md5);
+        hash.addData(fileData);
         const auto fileHash = hash.result().toHex();
 
-        if (m_db.newSourceFileId(fileHash) < 0) {
-            qDebug() << "Embedder::fileEmbed() :" << fileHash << file.fileName();
+        const auto newSourceFileId = m_db.newSourceFileId(fileHash, fileName);
+        qDebug() << "Embedder::fileEmbed() " << fileHash << newSourceFileId;
+        if (newSourceFileId > 0) {
+            qDebug() << "Embedder::fileEmbed() new:" << fileHash << fileName;
             return;
         };
 
-        for (const auto &chunk : m_parser->bytesChunks(fileData)) {
+        for (const auto& chunk : m_parser->toChunks(QVariant(QString::fromUtf8(fileData)))) {
             const auto embedding = m_generator->generate(chunk);
-            m_db.saveEmbedding(embedding);
+
+            Q_ASSERT(chunk.length());
+            Q_ASSERT(embedding.length());
+
+            m_db.embeddingSave(newSourceFileId, embedding, chunk); 
         };
 
         file.close();
+
     } else {
         qWarning() << "Embedder::embedderFile() [ saveEmbeeding returned false ]";
     };
