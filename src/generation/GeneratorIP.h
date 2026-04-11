@@ -4,7 +4,6 @@
 #include <QByteArray>
 #include <QNetworkAccessManager>
 
-#include "../config/ConfigGenerator.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"

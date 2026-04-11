@@ -2,10 +2,7 @@
 #ifndef ROLEPLAYER_H
 #define ROLEPLAYER_H
 
-#include "../config/ConfigRoleplay.h"
-#include "../db/EmbeddingDatabase.h"
-#include "../db/RoleplayDatabase.h"
-#include "llama.h"
+#include <QJsonObject>
 
 class Roleplayer
 {
