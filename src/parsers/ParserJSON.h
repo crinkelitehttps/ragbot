@@ -14,11 +14,11 @@ public:
     auto toChunks(const QVariant& dataVariant) -> QStringList override;
 
 private:
-    void extractTextRecursive(
+    auto extractTextRecursive(
         const QJsonValue& value,
         QStringList& texts,
         const QString& prefix = QString()
-    );
+    ) -> void;
 
     auto stringifyObject(const QJsonObject& obj) -> QString ;
 };

@@ -23,10 +23,6 @@ HEADERS += \
     src/asset/Embedder.h \
     src/asset/Researcher.h \
     src/asset/Roleplayer.h \
-    src/config/ConfigResearch.h \
-    src/config/ConfigEmbed.h \
-    src/config/ConfigRoleplay.h \
-    src/config/ConfigGenerator.h \
     src/db/EmbeddingDatabase.h \
     src/db/RoleplayDatabase.h \
     src/generation/Generator.h \

@@ -114,7 +114,7 @@ auto Embedder::fileEmbed(QFile& file) -> void
 
         const auto newSourceFileId = m_db.newSourceFileId(fileHash, fileName);
         qDebug() << "Embedder::fileEmbed() " << fileHash << newSourceFileId;
-        if (newSourceFileId > 0) {
+        if (newSourceFileId < 0) {
             qDebug() << "Embedder::fileEmbed() new:" << fileHash << fileName;
             return;
         };

@@ -5,6 +5,50 @@
 #include <QDebug>
 
 
+auto ParserJSON::toChunks(const QVariant &dataVariant) -> QStringList
+{
+    QJsonDocument dataDocument;
+    QJsonParseError error;
+    
+    // Handle different input types
+    if (dataVariant.type() == QVariant::String) {
+        // Parse JSON from string
+        dataDocument = QJsonDocument::fromJson(dataVariant.toString().toUtf8(), &error);
+        if (dataDocument.isNull()) {
+            qWarning() << "ParserJSON::toChunks(): failed to parse JSON string:" << error.errorString();
+            return {};
+        }
+    } else if (dataVariant.type() == QVariant::ByteArray) {
+        // Parse JSON from byte array
+        dataDocument = QJsonDocument::fromJson(dataVariant.toByteArray(), &error);
+        if (dataDocument.isNull()) {
+            qWarning() << "ParserJSON::toChunks(): failed to parse JSON bytes:" << error.errorString();
+            return {};
+        }
+    } else {
+        // Try to convert directly (for QJsonDocument, QJsonObject, QJsonArray)
+        dataDocument = dataVariant.toJsonDocument();
+        if (dataDocument.isNull()) {
+            qWarning() << "ParserJSON::toChunks(): unsupported variant type or invalid JSON";
+            return {};
+        }
+    }
+    
+    QStringList chunks;
+    if (dataDocument.isArray()) {
+        QJsonArray arr = dataDocument.array();
+        for (const QJsonValueRef &val : arr) {
+            if (val.isObject()) {
+                chunks.append(stringifyObject(val.toObject()));
+            }
+        }
+    } else if (dataDocument.isObject()) {
+        chunks.append(stringifyObject(dataDocument.object()));
+    }
+    return chunks;
+}
+
+#if DEBUG_DISABLE
 //--------------------------------------------------------------------------------
 auto ParserJSON::toChunks(const QVariant &dataVariant) -> QStringList
 {
@@ -38,6 +82,7 @@ auto ParserJSON::toChunks(const QVariant &dataVariant) -> QStringList
     return chunks;
 }
 
+#endif
 
 //--------------------------------------------------------------------------------
 auto ParserJSON::stringifyObject(const QJsonObject& obj) -> QString
@@ -67,7 +112,10 @@ auto ParserJSON::stringifyObject(const QJsonObject& obj) -> QString
 
 #ifndef DEBUG_DISABLE
 //--------------------------------------------------------------------------------
-void ParserJSON::extractTextRecursive(const QJsonValue &value, QStringList &texts, const QString &prefix)
+auto ParserJSON::extractTextRecursive(const QJsonValue &value,
+        QStringList &texts,
+        const QString &prefix
+) -> void
 {
     if (value.isObject()) {
         const QJsonObject obj = value.toObject();

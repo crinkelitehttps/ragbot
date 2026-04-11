@@ -53,6 +53,7 @@ auto EmbeddingDatabase::initialize(const QString& dbName) -> void
             faiss_id INTEGER PRIMARY KEY,
             source_id INTEGER NOT NULL,
             content TEXT NOT NULL,
+            embedding BLOB NOT NULL,
             FOREIGN KEY (source_id) REFERENCES sources(source_file_id)
                 ON DELETE CASCADE
         );
@@ -140,22 +141,28 @@ auto EmbeddingDatabase::embeddingSave(
 {
     if (chunkVector.size() != Dimensions) return false;
 
-    Q_UNUSED(chunkContent); // will use
+    int retCode = faiss_Index_add(m_index.get(), 1, chunkVector.constData());
+    if (retCode != 0) {
+        qWarning() << "EmbeddingDatabase::embeddingSave() retCode :" << retCode;
+        return false;
+    }
 
     QSqlQuery query(m_db);
 
-    sourceId = query.lastInsertId().toInt();
+    auto faiss = faiss_Index_add(m_index.get(), 1, chunkVector.constData());
 
-    auto currentFaissId = faiss_Index_ntotal(m_index.get());
-
-    faiss_Index_add(m_index.get(), 1, chunkVector.constData());
+    //auto currentFaissId = faiss_Index_ntotal(m_index.get());
 
     query.prepare("INSERT INTO chunks (faiss_id, source_id, content) VALUES (?, ?, ?)");
-    query.addBindValue(static_cast<qlonglong>(currentFaissId));
+    query.addBindValue(faiss);
     query.addBindValue(sourceId);
     query.addBindValue(chunkContent);
+    const auto ret = query.exec();
+    if (!ret) {
+        qDebug() << "EmbeddingDatabase::embeddingSave():" << query.lastError();
+    }
 
-    return query.exec();
+    return ret;
 }
 
 
@@ -195,38 +202,11 @@ auto EmbeddingDatabase::loadExistingEmbeddings() -> void
 }
 
 
-//query.exec("PRAGMA foreign_keys = ON;");
-
-//// Sources table
-//query.exec(R"(
-//    CREATE TABLE IF NOT EXISTS sources (
-//        source_file_id INTEGER PRIMARY KEY AUTOINCREMENT,
-//        sha256 TEXT UNIQUE NOT NULL,
-//        source_file_path TEXT NOT NULL,
-//        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-//    );
-//)");
-
-//// Optional: explicit index (UNIQUE already creates one, but this is self-documenting)
-//query.exec(R"(
-//    CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_sha256
-//    ON sources(sha256);
-//)");
-
-//// Chunks table
-//query.exec(R"(
-//    CREATE TABLE IF NOT EXISTS chunks (
-//        faiss_id INTEGER PRIMARY KEY,
-//        source_id INTEGER NOT NULL,
-//        content TEXT NOT NULL,
-//        FOREIGN KEY (source_id) REFERENCES sources(source_file_id)
-//            ON DELETE CASCADE
-//    );
-//)");
-
-
 //--------------------------------------------------------------------------------
-auto EmbeddingDatabase::newSourceFileId(const QByteArray& contentChecksum, const QString& file) -> int
+auto EmbeddingDatabase::newSourceFileId(
+        const QByteArray& contentChecksum,
+        const QString& file
+        ) -> int
 {
     QSqlQuery query(m_db);
 
