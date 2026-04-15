@@ -1,5 +1,5 @@
 QT -= gui
-QT += core network sql
+QT += core network
 CONFIG += c++17 console
 CONFIG -= app_bundle
 CONFIG += debug
@@ -13,6 +13,7 @@ SOURCES += \
     src/asset/Researcher.cpp \
     src/db/EmbeddingDatabase.cpp \
     src/db/RoleplayDatabase.cpp \
+    src/db/VectorIndex.cpp \
     src/generation/GeneratorImmediate.cpp \
     src/generation/GeneratorIP.cpp \
     src/parsers/ParserJSON.cpp
@@ -25,6 +26,7 @@ HEADERS += \
     src/asset/Roleplayer.h \
     src/db/EmbeddingDatabase.h \
     src/db/RoleplayDatabase.h \
+    src/db/VectorIndex.h \
     src/generation/Generator.h \
     src/generation/GeneratorImmediate.h \
     src/generation/GeneratorIP.h \
@@ -48,8 +50,6 @@ INCLUDEPATH += $${QT_ROOT}/include/QtNetwork
 INCLUDEPATH += /home/joe/source/llama.cpp/include
 INCLUDEPATH += /home/joe/source/llama.cpp/common
 INCLUDEPATH += /home/joe/source/llama.cpp/ggml/include
-INCLUDEPATH += /home/joe/source/faiss/c_api
-
 # Static libraries
 LIBS += /home/joe/source/build-llama.cpp/common/libcommon.a
 LIBS += /home/joe/source/build-llama.cpp/src/libllama.a
@@ -57,6 +57,4 @@ LIBS += /home/joe/source/build-llama.cpp/ggml/src/libggml.a
 LIBS += /home/joe/source/build-llama.cpp/ggml/src/libggml-base.a
 LIBS += /home/joe/source/build-llama.cpp/ggml/src/libggml-cpu.a
 LIBS += /home/joe/source/build-llama.cpp/ggml/src/ggml-vulkan/libggml-vulkan.a
-LIBS += /home/joe/source/faiss/build/c_api/libfaiss_c.a
-LIBS += /home/joe/source/faiss/build/faiss/libfaiss.a
-LIBS += -lopenblas -lgomp -lpthread -ldl -lm -lstdc++ -lvulkan
+LIBS += -lopenblas -lgomp -lpthread -ldl -lm -lstdc++ -lvulkan -lsqlite3

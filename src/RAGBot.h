@@ -13,7 +13,7 @@ public:
     void start();
 private:
 
-    auto processQuestion(const QString &question) -> void;
+    auto processQuestion(const QString& question) -> void;
 
     const Embedder& m_embedder;
     const Researcher& m_researcher;

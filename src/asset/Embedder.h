@@ -22,17 +22,11 @@ public:
     ~Embedder() = default;
 
     auto processAllFiles() -> void;
-    auto fileEmbed(QFile& file) -> void;
+    // Returns true if the file was newly indexed, false if already up-to-date.
+    auto fileEmbed(QFile& file) -> bool;
     static auto generationEmbed(const QString& generation) -> void;
 
-    [[nodiscard]] auto queryResults(const QString& query)
-        -> QString;
-
-    [[nodiscard]] auto isValid() const
-        -> bool { return m_isValid; }
-
-    [[nodiscard]] auto textVectors()
-        -> QVector<float>&;
+    [[nodiscard]] auto isValid() const -> bool { return m_isValid; }
 
 private:
     EmbeddingDatabase m_db;

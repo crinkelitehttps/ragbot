@@ -2,11 +2,7 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QEventLoop>
-#include <QTimer>
 #include "Embedder.h"
 #include "../parsers/ParserJSON.h"
 #include "../generation/GeneratorImmediate.h"
@@ -15,130 +11,116 @@
 
 //--------------------------------------------------------------------------------
 Embedder::Embedder(const QJsonObject& config)
-    : m_db(EmbeddingDatabase(config))
+    : m_db(config)
     , m_files(config.value("files").toString())
-    , m_isValid(true)
+    , m_isValid(false)
     , m_parser(new ParserJSON())
 {
-    qDebug() << "Embedder::Embedder()" << m_files;
-
     if (config.isEmpty()) {
-        qDebug() << "Embedder::Embedder() [ no valid config ]";
+        qWarning() << "Embedder::Embedder(): empty config";
         return;
     }
 
-    const auto& name = config.value("name").toString();
-    if (name.isEmpty()) {
-        qWarning() << "Embedder::Embedder() [ invalid config ]";
+    if (!m_db.isOpen()) {
+        qWarning() << "Embedder::Embedder(): database did not open";
+        return;
     }
-    
-    const auto generatorConfig = config.value("generator").toObject();
 
+    const QJsonObject generatorConfig = config.value("generator").toObject();
     if (config.value("isNetworkHost").toBool()) {
         m_generator = new GeneratorIP(generatorConfig);
     } else {
         m_generator = new GeneratorImmediate(generatorConfig);
     }
 
-    if (m_generator != nullptr) {
-        processAllFiles();
+    if (m_generator == nullptr) {
+        qWarning() << "Embedder::Embedder(): failed to create generator";
         return;
     }
 
-    qWarning() << "Embedder::Embedder() [ failed to create the generator ]";
+    m_isValid = true;
+    processAllFiles();
 }
 
 
 //--------------------------------------------------------------------------------
 void Embedder::processAllFiles()
 {
+    // Count files first so we can log progress as N/total.
     int total = 0;
+    QDirIterator countIt(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
+    while (countIt.hasNext()) { countIt.next(); ++total; }
+
+    qDebug() << "Embedder::processAllFiles(): found" << total << "JSON files in" << m_files;
+
+    int indexed = 0;
+    int skipped = 0;
     int processed = 0;
-    
-    QDirIterator countIt(
-            m_files,
-            QStringList()
-            << "*.json",
-            QDir::Files,
-            QDirIterator::Subdirectories
-    );
 
-    while (countIt.hasNext()) {
-        countIt.next();
-        total++;
-    }
-    
-    qDebug() << "Embedder::processAllFiles(): Found" << total << "JSON files";
-    
-    QDirIterator dIt(
-            m_files,
-            QStringList()
-            << "*.json",
-            QDir::Files,
-            QDirIterator::Subdirectories
-    );
-    
-    while (dIt.hasNext()) {
-        QString filePath = dIt.next();
-        QFileInfo fileInfo(filePath);
-        
-        processed++;
+    QDirIterator it(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QString filePath = it.next();
+        ++processed;
 
-        qDebug() << QString("[%1/%2] %3").arg(processed)
-            .arg(total)
-            .arg(fileInfo.fileName());
-        
+        qDebug() << QString("[%1/%2] %3")
+            .arg(processed).arg(total)
+            .arg(QFileInfo(filePath).fileName());
 
         QFile file(filePath);
-        fileEmbed(file);
+        const bool wasNew = fileEmbed(file);
+        if (wasNew) ++indexed; else ++skipped;
     }
-    
-    qDebug() << "Embedder::processAllFiles(): Complete! Processed" 
-        << processed
-        << "files";
 
-};
-
-
-//--------------------------------------------------------------------------------
-auto Embedder::fileEmbed(QFile& file) -> void
-{
-    
-    if (file.open(QIODevice::ReadOnly)) {
-
-        const auto fileData = file.readAll();
-        const auto fileName = file.fileName();
-        QCryptographicHash hash(QCryptographicHash::Md5);
-        hash.addData(fileData);
-        const auto fileHash = hash.result().toHex();
-
-        const auto newSourceFileId = m_db.newSourceFileId(fileHash, fileName);
-        qDebug() << "Embedder::fileEmbed() " << fileHash << newSourceFileId;
-        if (newSourceFileId < 0) {
-            qDebug() << "Embedder::fileEmbed() new:" << fileHash << fileName;
-            return;
-        };
-
-        for (const auto& chunk : m_parser->toChunks(QVariant(QString::fromUtf8(fileData)))) {
-            const auto embedding = m_generator->generate(chunk);
-
-            Q_ASSERT(chunk.length());
-            Q_ASSERT(embedding.length());
-
-            m_db.embeddingSave(newSourceFileId, embedding, chunk); 
-        };
-
-        file.close();
-
-    } else {
-        qWarning() << "Embedder::embedderFile() [ saveEmbeeding returned false ]";
-    };
-
-};
+    qDebug() << "Embedder::processAllFiles(): done —"
+             << indexed << "newly indexed,"
+             << skipped << "already up-to-date";
+}
 
 
 //--------------------------------------------------------------------------------
-auto Embedder::generationEmbed(const QString &generation) -> void
+auto Embedder::fileEmbed(QFile& file) -> bool
 {
-    qDebug() << "Embedder::generationEmbed() [ not implemented ]" << generation.length(); 
-};
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "Embedder::fileEmbed(): cannot open" << file.fileName();
+        return false;
+    }
+
+    const QByteArray fileData = file.readAll();
+    file.close();
+
+    QCryptographicHash hash(QCryptographicHash::Md5);
+    hash.addData(fileData);
+    const QByteArray fileHash = hash.result().toHex();
+
+    const int sourceId = m_db.newSourceFileId(fileHash, file.fileName());
+    if (sourceId < 0) {
+        // -1 means the checksum already exists in the database — skip re-embedding.
+        return false;
+    }
+
+    int chunksAdded = 0;
+    for (const QString& chunk : m_parser->toChunks(QVariant(QString::fromUtf8(fileData)))) {
+        const QVector<float> embedding = m_generator->generate(chunk);
+
+        if (embedding.isEmpty()) {
+            qWarning() << "Embedder::fileEmbed(): generator returned empty embedding for chunk";
+            continue;
+        }
+
+        if (m_db.embeddingSave(sourceId, embedding, chunk)) {
+            ++chunksAdded;
+        }
+    }
+
+    qDebug() << "Embedder::fileEmbed(): indexed" << chunksAdded
+             << "chunks from" << QFileInfo(file.fileName()).fileName();
+    return true;
+}
+
+
+//--------------------------------------------------------------------------------
+auto Embedder::generationEmbed(const QString& generation) -> void
+{
+    Q_UNUSED(generation)
+    qDebug() << "Embedder::generationEmbed() [ not implemented ]";
+}
