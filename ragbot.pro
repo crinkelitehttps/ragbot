@@ -11,6 +11,7 @@ SOURCES += \
     src/RAGBot.cpp \
     src/asset/Embedder.cpp \
     src/asset/Researcher.cpp \
+    src/asset/Roleplayer.cpp \
     src/db/EmbeddingDatabase.cpp \
     src/db/RoleplayDatabase.cpp \
     src/db/VectorIndex.cpp \

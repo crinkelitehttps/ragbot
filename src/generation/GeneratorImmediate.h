@@ -13,7 +13,7 @@
 #include "common.h"
 #pragma GCC diagnostic pop
 
-class GeneratorImmediate : public virtual Generator 
+class GeneratorImmediate : public virtual Generator
 {
 public:
     GeneratorImmediate(const QJsonObject& config);
@@ -32,12 +32,15 @@ public:
 private:
     static constexpr int DefaultMaxTokenGen { 512 };
     static constexpr int DefaultBufferLength { 128 };
-    static constexpr int DefaultBatch { 2048 };
-    static constexpr int DefaultCtx { 2048 };
-    
-    llama_context *m_embedCtx;
-    llama_model *m_embedModel;
-    bool m_isValid;
+    static constexpr int DefaultBatch { 512 };
+    static constexpr int DefaultCtx { 8192 };
+
+    enum class Mode { Embedding, Generation };
+
+    llama_context* m_ctx   {};
+    llama_model*   m_model {};
+    Mode           m_mode  { Mode::Embedding };
+    bool           m_isValid { false };
 };
 
 #endif // GENERATORIMMEDIATE_H

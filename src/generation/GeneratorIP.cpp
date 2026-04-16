@@ -1,40 +1,42 @@
 #include <QTimer>
 #include <QEventLoop>
-#include <QFile>
 #include <QNetworkReply>
+#include <QTextStream>
 #include "GeneratorIP.h"
 
 
 //--------------------------------------------------------------------------------
 GeneratorIP::GeneratorIP(const QJsonObject& config)
-    : Generator(config.value("generator").toObject())
-    , m_modelPath(config.value("modelPath").toString())
-    , m_timeout(DefaultTimeout)
+    : Generator(config)
+    , m_basePath(config.value("basePath").toString(
+          config.value("remotePath").toString())) // support both key names
+    , m_modelName(config.value("modelName").toString())
+    , m_timeout(config.value("timeout").toInt(DefaultTimeout))
+    , m_isValid(!m_basePath.isEmpty())
 {
-    qDebug() << "GeneratorIP::GeneratorIP(): " << config;
-};
+    qDebug() << "GeneratorIP::GeneratorIP():" << config;
+    if (!m_isValid) {
+        qWarning() << "GeneratorIP: config has no 'basePath' or 'remotePath' — generator disabled";
+    }
+}
 
 
 //--------------------------------------------------------------------------------
-auto GeneratorIP::parseResponse(const QByteArray& responseData) -> QVector<float> {
-    QVector<float> embedding;
-    QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
-    
-    if (responseDoc.isNull()) return {};
+auto GeneratorIP::parseEmbeddingResponse(const QByteArray& responseData) -> QVector<float>
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(responseData);
+    if (doc.isNull()) return {};
 
-    QJsonObject obj = responseDoc.object();
-    QJsonArray dataArray = obj["data"].toArray();
-    
+    const QJsonArray dataArray = doc.object()["data"].toArray();
     if (dataArray.isEmpty()) return {};
 
-    QJsonObject firstItem = dataArray[0].toObject();
-    QJsonArray embArray = firstItem["embedding"].toArray();
+    const QJsonArray embArray = dataArray[0].toObject()["embedding"].toArray();
 
+    QVector<float> embedding;
     embedding.reserve(embArray.size());
     for (const auto& val : embArray) {
         embedding.append(static_cast<float>(val.toDouble()));
     }
-    
     return embedding;
 }
 
@@ -42,51 +44,47 @@ auto GeneratorIP::parseResponse(const QByteArray& responseData) -> QVector<float
 //--------------------------------------------------------------------------------
 auto GeneratorIP::generate(const QString& data) -> QVector<float>
 {
-    QJsonObject request{{"input", data}};
-    QNetworkRequest netRequest(QUrl(m_modelPath + "v1/embeddings"));
-    netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    netRequest.setTransferTimeout(m_timeout);
+    if (!m_isValid) return {};
 
-    QNetworkReply *reply = m_network.post(netRequest, QJsonDocument(request).toJson(QJsonDocument::Compact));
+    const QJsonObject body{{"input", data}, {"model", m_modelName}};
+    QNetworkRequest req(QUrl(m_basePath + "v1/embeddings"));
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    req.setTransferTimeout(m_timeout);
+
+    QNetworkReply* reply = m_network.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
+
     QEventLoop loop;
     QTimer timer;
     timer.setSingleShot(true);
-
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-
+    QObject::connect(&timer, &QTimer::timeout,         &loop, &QEventLoop::quit);
     timer.start(m_timeout);
     loop.exec();
 
-    QVector<float> embedding;
+    QVector<float> result;
     if (timer.isActive()) {
         timer.stop();
         if (reply->error() == QNetworkReply::NoError) {
-            embedding = parseResponse(reply->readAll());
+            result = parseEmbeddingResponse(reply->readAll());
         } else {
-            qWarning() << "Network error:" << reply->errorString();
+            qWarning() << "GeneratorIP::generate() network error:" << reply->errorString();
         }
     } else {
         reply->abort();
-        qWarning() << "Request timed out";
+        qWarning() << "GeneratorIP::generate() timed out after" << m_timeout << "ms";
     }
-
     reply->deleteLater();
-
-    if (embedding.isEmpty()) {
-        qWarning() << "No embedding data";
-    }
-
-    return embedding;
+    return result;
 }
 
 
 //--------------------------------------------------------------------------------
-auto GeneratorIP::parseStaticResponse(const QByteArray& data) -> QString {
-    QJsonDocument doc = QJsonDocument::fromJson(data);
+auto GeneratorIP::parseStaticResponse(const QByteArray& data) -> QString
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(data);
     if (doc.isNull()) return {};
 
-    QJsonArray choices = doc.object()["choices"].toArray();
+    const QJsonArray choices = doc.object()["choices"].toArray();
     if (choices.isEmpty()) return {};
 
     return choices[0].toObject()["message"].toObject()["content"].toString();
@@ -94,31 +92,25 @@ auto GeneratorIP::parseStaticResponse(const QByteArray& data) -> QString {
 
 
 //--------------------------------------------------------------------------------
-auto GeneratorIP::parseStreamChunk(const QByteArray& data) -> QString {
-    QString fullChunkText;
-    QString rawText(data);
-    QStringList lines = rawText.split("\n");
+auto GeneratorIP::parseStreamChunk(const QByteArray& data) -> QString
+{
+    QString result;
+    for (const QString& line : QString(data).split('\n')) {
+        if (!line.startsWith(SseDataPrefix)) continue;
 
-    for (const QString &line : lines) {
-        if (!line.startsWith("data: ")) continue;
-        
-        QString jsonStr = line.mid(SseDataPrefix.size()).trimmed();
+        const QString jsonStr = line.mid(SseDataPrefix.size()).trimmed();
         if (jsonStr == "[DONE]" || jsonStr.isEmpty()) continue;
 
-        QJsonDocument streamDoc = QJsonDocument::fromJson(jsonStr.toUtf8());
-        if (streamDoc.isNull()) continue;
+        const QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
+        if (doc.isNull()) continue;
 
-        // Flattened JSON traversal
-        QJsonObject obj = streamDoc.object();
-        QJsonArray choices = obj["choices"].toArray();
-        if (choices.isEmpty()) continue;
-
-        QJsonObject delta = choices[0].toObject()["delta"].toObject();
+        const QJsonObject delta =
+            doc.object()["choices"].toArray().at(0).toObject()["delta"].toObject();
         if (delta.contains("content")) {
-            fullChunkText += delta["content"].toString();
+            result += delta["content"].toString();
         }
     }
-    return fullChunkText;
+    return result;
 }
 
 
@@ -127,200 +119,60 @@ auto GeneratorIP::generateText(
     QString& systemPrompt,
     bool isStream,
     QString& prompt
-) -> QString 
+) -> QString
 {
+    if (!m_isValid) return {};
+
     QJsonArray messages;
     if (!systemPrompt.isEmpty()) {
         messages.append(QJsonObject{{"role", "system"}, {"content", systemPrompt}});
     }
     messages.append(QJsonObject{{"role", "user"}, {"content", prompt}});
 
-    QJsonObject request{
-        {"model", m_modelPath},
-        {"stream", isStream},
-        {"messages", messages},
+    const QJsonObject body{
+        {"model",       m_modelName},
+        {"stream",      isStream},
+        {"messages",    messages},
         {"temperature", DefaultTemp},
-        {"max_tokens", DefaultMaxTokens}
+        {"max_tokens",  static_cast<int>(DefaultMaxTokens)}
     };
 
-    QNetworkRequest netRequest(QUrl(m_modelPath + "/chat/completions"));
-    netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    netRequest.setTransferTimeout(m_timeout);
+    QNetworkRequest req(QUrl(m_basePath + "v1/chat/completions"));
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    req.setTransferTimeout(m_timeout);
 
-    QNetworkReply *reply = m_network.post(netRequest, QJsonDocument(request).toJson());
+    QNetworkReply* reply = m_network.post(req, QJsonDocument(body).toJson());
+
     QEventLoop loop;
     QTimer timer;
     timer.setSingleShot(true);
-
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    QObject::connect(&timer, &QTimer::timeout,         &loop, &QEventLoop::quit);
 
-    QString fullResponse;
+    QString streamed;
     if (isStream) {
         QObject::connect(reply, &QNetworkReply::readyRead, [&]() {
-            QString content = parseStreamChunk(reply->readAll());
-            fullResponse += content;
-            QTextStream(stdout) << content << Qt::flush;
+            const QString chunk = parseStreamChunk(reply->readAll());
+            streamed += chunk;
+            QTextStream(stdout) << chunk << Qt::flush;
         });
     }
 
     timer.start(m_timeout);
     loop.exec();
 
-    // 4. Cleanup and Return
-    QString finalResult;
+    QString result;
     if (timer.isActive()) {
         timer.stop();
         if (reply->error() == QNetworkReply::NoError) {
-            finalResult = isStream ? fullResponse : parseStaticResponse(reply->readAll());
+            result = isStream ? streamed : parseStaticResponse(reply->readAll());
         } else {
-            qWarning() << "Network error:" << reply->errorString();
+            qWarning() << "GeneratorIP::generateText() network error:" << reply->errorString();
         }
     } else {
         reply->abort();
-        qWarning() << "Request timed out";
+        qWarning() << "GeneratorIP::generateText() timed out after" << m_timeout << "ms";
     }
-
     reply->deleteLater();
-    return finalResult;
+    return result;
 }
-
-
-#if DEBUG_DISABLE
-
-//--------------------------------------------------------------------------------
-auto GeneratorIP::generateText(
-    SystemPrompt& systemPrompt,
-    Prompt& prompt,
-    bool isStream
-) -> QString 
-{
-    QJsonObject request;
-    request["model"] = m_modelPath;
-    request["stream"] = isStream;
-    
-    QJsonArray messages;
-    Prompt userMessage = prompt;
-    userMessage = prompt;
-    
-    if (!systemPrompt.value.isEmpty()) {
-        QJsonObject sysMsg;
-        sysMsg["role"] = "system";
-        sysMsg["content"] = systemPrompt.value;
-        messages.append(sysMsg);
-    }
-    
-    QJsonObject userMsg;
-    userMsg["role"] = "user";
-    userMsg["content"] = userMessage.value;
-    messages.append(userMsg);
-    
-    request["messages"] = messages;
-    request["temperature"] = 0.7;
-    request["max_tokens"] = 2000;
-    
-    QJsonDocument doc(request);
-    QByteArray jsonData = doc.toJson();
-    
-    QNetworkRequest netRequest;
-    netRequest.setUrl(QUrl(m_modelPath + "/chat/completions"));
-
-    netRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    netRequest.setTransferTimeout(m_timeout);
-    
-    QNetworkReply *reply = m_network.post(netRequest, jsonData);
-    
-    QEventLoop loop;
-    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    
-    QTimer timer;
-    timer.setSingleShot(true);
-    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timer.start(m_timeout);
-    
-    if (isStream) {
-        QString fullResponse;
-        QObject::connect(reply, &QNetworkReply::readyRead, [&]() {
-            QByteArray data = reply->readAll();
-            QString text(data);
-            
-            // Parse SSE format
-            QStringList lines = text.split("\n");
-            for (const QString &line : lines) {
-                if (line.startsWith("data: ")) {
-                    QString jsonStr = line.mid(6).trimmed();
-                    if (jsonStr == "[DONE]") continue;
-                    
-                    QJsonDocument streamDoc = QJsonDocument::fromJson(jsonStr.toUtf8());
-                    if (!streamDoc.isNull()) {
-                        QJsonObject obj = streamDoc.object();
-                        if (obj.contains("choices")) {
-                            QJsonArray choices = obj["choices"].toArray();
-                            if (!choices.isEmpty()) {
-                                QJsonObject choice = choices[0].toObject();
-                                if (choice.contains("delta")) {
-                                    QJsonObject delta = choice["delta"].toObject();
-                                    if (delta.contains("content")) {
-                                        QString content = delta["content"].toString();
-                                        fullResponse += content;
-                                        QTextStream(stdout) << content << Qt::flush;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        
-        loop.exec();
-        
-        if (timer.isActive()) {
-            timer.stop();
-            reply->deleteLater();
-            return fullResponse;
-        } else {
-            reply->abort();
-            reply->deleteLater();
-            qWarning() << "Request timed out";
-            return QString();
-        }
-    }
-    
-    loop.exec();
-    
-    QString response;
-    
-    if (timer.isActive()) {
-        timer.stop();
-        
-        if (reply->error() == QNetworkReply::NoError) {
-            QByteArray responseData = reply->readAll();
-            QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
-            
-            if (!responseDoc.isNull()) {
-                QJsonObject obj = responseDoc.object();
-                if (obj.contains("choices")) {
-                    QJsonArray choices = obj["choices"].toArray();
-                    if (!choices.isEmpty()) {
-                        QJsonObject choice = choices[0].toObject();
-                        if (choice.contains("message")) {
-                            QJsonObject message = choice["message"].toObject();
-                            response = message["content"].toString();
-                        }
-                    }
-                }
-            }
-        } else {
-            qWarning() << "Network error:" << reply->errorString();
-            Q_ASSERT(reply->errorString().isEmpty());
-        }
-    } else {
-        reply->abort();
-        qWarning() << "Request timed out";
-    }
-    
-    reply->deleteLater();
-    return response;
-};
-#endif

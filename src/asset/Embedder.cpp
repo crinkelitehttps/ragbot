@@ -27,10 +27,10 @@ Embedder::Embedder(const QJsonObject& config)
     }
 
     const QJsonObject generatorConfig = config.value("generator").toObject();
-    if (config.value("isNetworkHost").toBool()) {
-        m_generator = new GeneratorIP(generatorConfig);
-    } else {
+    if (generatorConfig.value("isImmediate").toBool(false)) {
         m_generator = new GeneratorImmediate(generatorConfig);
+    } else {
+        m_generator = new GeneratorIP(generatorConfig);
     }
 
     if (m_generator == nullptr) {
@@ -39,7 +39,12 @@ Embedder::Embedder(const QJsonObject& config)
     }
 
     m_isValid = true;
-    processAllFiles();
+
+    if (config.value("skipIndex").toBool(false)) {
+        qDebug() << "Embedder: skipping index pass (-s flag set)";
+    } else {
+        processAllFiles();
+    }
 }
 
 
@@ -100,10 +105,11 @@ auto Embedder::fileEmbed(QFile& file) -> bool
 
     int chunksAdded = 0;
     for (const QString& chunk : m_parser->toChunks(QVariant(QString::fromUtf8(fileData)))) {
-        const QVector<float> embedding = m_generator->generate(chunk);
+        // "search_document: " is the Nomic embedding task prefix for indexed content.
+        const QVector<float> embedding = m_generator->generate("search_document: " + chunk);
 
         if (embedding.isEmpty()) {
-            qWarning() << "Embedder::fileEmbed(): generator returned empty embedding for chunk";
+            qWarning() << "Embedder::fileEmbed(): empty embedding returned for chunk";
             continue;
         }
 
@@ -115,6 +121,26 @@ auto Embedder::fileEmbed(QFile& file) -> bool
     qDebug() << "Embedder::fileEmbed(): indexed" << chunksAdded
              << "chunks from" << QFileInfo(file.fileName()).fileName();
     return true;
+}
+
+
+//--------------------------------------------------------------------------------
+auto Embedder::search(const QString& query, int topK)
+    -> QVector<EmbeddingDatabase::SearchResult>
+{
+    if (!m_generator || !m_generator->isValid()) {
+        qWarning() << "Embedder::search(): generator not available";
+        return {};
+    }
+
+    // "search_query: " is the Nomic task prefix for query embeddings.
+    const QVector<float> embedding = m_generator->generate("search_query: " + query);
+    if (embedding.isEmpty()) {
+        qWarning() << "Embedder::search(): failed to embed query";
+        return {};
+    }
+
+    return m_db.textResults(embedding, topK);
 }
 
 

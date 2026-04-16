@@ -1,5 +1,6 @@
 export BUILD_DIR="../build-ragbot"
 export CODE_DIR=$(pwd)
+cp ./config.json $BUILD_DIR
 cd $BUILD_DIR
-gdb --args ./ragbot -l -c ./config.json -d "/home/joe/source/Cataclysm-DDA/data/json"
+gdb --args ./ragbot -c ./config.json -s
 cd $CODE_DIR

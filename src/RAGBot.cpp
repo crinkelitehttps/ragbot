@@ -1,17 +1,17 @@
 #include <QCoreApplication>
 #include <QDebug>
-#include <QFile>
 #include <QTextStream>
 #include "RAGBot.h"
 
 //--------------------------------------------------------------------------------
-RAGBot::RAGBot(const Embedder& embedder, const Researcher& researcher, const Roleplayer& roleplayer)
+RAGBot::RAGBot(Embedder& embedder, Researcher& researcher, Roleplayer& roleplayer)
     : m_embedder(embedder)
     , m_researcher(researcher)
     , m_roleplayer(roleplayer)
 {
     qDebug() << "RAGBot::RAGBot()";
 }
+
 
 //--------------------------------------------------------------------------------
 void RAGBot::start()
@@ -39,13 +39,21 @@ auto RAGBot::processQuestion(const QString& question) -> void
 {
     qDebug() << "RAGBot::processQuestion():" << question;
 
-    // TODO(task 2): embed question via m_embedder, search DB, pipe through researcher → roleplayer
-    // Stage 1 — embed + retrieve: m_embedder.search(question) → QVector<SearchResult>
-    // Stage 2 — research:         m_researcher.research(question, results) → QString
-    // Stage 3 — roleplay:         m_roleplayer.respond(researchAnswer, question) → QString
-    // Stage 4 — log:              m_conversationDb.logConversation(...)
+    // Stage 1: embed the question and retrieve the most similar indexed chunks.
+    auto results = m_embedder.search(question);
+    if (results.isEmpty()) {
+        QTextStream(stdout) << "\nNo relevant documents found.\n" << Qt::flush;
+        return;
+    }
+    qDebug() << "RAGBot::processQuestion():" << results.size() << "chunks retrieved";
 
-    QTextStream(stdout) << "[pipeline not yet wired]\n" << Qt::flush;
+    // Stage 2: synthesise a factual answer from the retrieved context.
+    const QString researchAnswer = m_researcher.research(question, results);
+    if (researchAnswer.isEmpty()) {
+        qWarning() << "RAGBot::processQuestion(): researcher returned empty answer";
+        return;
+    }
+
+    // Stage 3: deliver the answer in-character.
+    m_roleplayer.respond(researchAnswer, question);
 }
-
-

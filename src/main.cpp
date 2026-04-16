@@ -42,10 +42,15 @@ auto main(int argc, char *argv[]) -> int
         {"l", "load"},
         "Index mode: build the embedding database from the data directory, then exit.");
 
+    const QCommandLineOption skipIndexOpt(
+        {"s", "skip-index"},
+        "Skip the embedding/indexing pass and go straight to the chat loop using whatever is already in the database.");
+
     cli.addOption(configOpt);
     cli.addOption(dataOpt);
     cli.addOption(dbOpt);
     cli.addOption(loadOpt);
+    cli.addOption(skipIndexOpt);
     cli.process(app);
 
     qDebug() << "main working dir" << QDir().absolutePath();
@@ -77,6 +82,9 @@ auto main(int argc, char *argv[]) -> int
         if (cli.isSet(dbOpt)) {
             embedderConfig["name"] = cli.value(dbOpt);
             qDebug() << "main: database path overridden to" << cli.value(dbOpt);
+        }
+        if (cli.isSet(skipIndexOpt)) {
+            embedderConfig["skipIndex"] = true;
         }
         root["embedder"] = embedderConfig;
     }

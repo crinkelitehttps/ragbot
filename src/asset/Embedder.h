@@ -22,6 +22,11 @@ public:
     ~Embedder() = default;
 
     auto processAllFiles() -> void;
+
+    // Embeds query and returns the top-K most similar stored chunks.
+    auto search(const QString& query, int topK = 10)
+        -> QVector<EmbeddingDatabase::SearchResult>;
+
     // Returns true if the file was newly indexed, false if already up-to-date.
     auto fileEmbed(QFile& file) -> bool;
     static auto generationEmbed(const QString& generation) -> void;
