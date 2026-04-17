@@ -5,6 +5,7 @@
 #include <QDebug>
 
 
+//--------------------------------------------------------------------------------
 auto ParserJSON::toChunks(const QVariant& dataVariant) -> QVector<Chunk>
 {
     QJsonDocument doc;
@@ -25,10 +26,16 @@ auto ParserJSON::toChunks(const QVariant& dataVariant) -> QVector<Chunk>
 
     QVector<Chunk> chunks;
 
-    auto addObject = [&](const QJsonObject& obj) {
+    auto addObject = [&](const QJsonObject& raw) {
+        // Skip abstract base templates — they exist only for copy-from resolution.
+        if (raw.value("abstract").toBool(false)) return;
+
+        const QJsonObject resolved = resolveObject(raw);
+
         Chunk chunk;
-        chunk.embedText = stringifyObject(obj);
-        chunk.content   = QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+        chunk.embedText = stringifyObject(resolved);
+        chunk.content   = QString::fromUtf8(
+            QJsonDocument(resolved).toJson(QJsonDocument::Compact));
         chunks.append(chunk);
     };
 
@@ -41,6 +48,51 @@ auto ParserJSON::toChunks(const QVariant& dataVariant) -> QVector<Chunk>
     }
 
     return chunks;
+}
+
+
+//--------------------------------------------------------------------------------
+auto ParserJSON::resolveObject(const QJsonObject& obj, int depth) const -> QJsonObject
+{
+    if (depth > 16) {
+        qWarning() << "ParserJSON::resolveObject(): copy-from chain too deep — stopping";
+        return obj;
+    }
+
+    const QString parentId = obj.value("copy-from").toString();
+    if (parentId.isEmpty() || !m_registry.contains(parentId)) {
+        // No parent, or parent unknown — return as-is (minus copy-from key).
+        QJsonObject result = obj;
+        result.remove("copy-from");
+        return result;
+    }
+
+    // Recursively resolve the parent first, then overlay our fields on top.
+    const QJsonObject resolvedParent = resolveObject(m_registry.value(parentId), depth + 1);
+    QJsonObject result = mergeObjects(resolvedParent, obj);
+    result.remove("copy-from");
+    return result;
+}
+
+
+//--------------------------------------------------------------------------------
+auto ParserJSON::mergeObjects(const QJsonObject& base, const QJsonObject& overlay) -> QJsonObject
+{
+    QJsonObject result = base;
+    for (auto it = overlay.begin(); it != overlay.end(); ++it) {
+        const QString& key = it.key();
+        if (key == "copy-from") continue;
+
+        if (it.value().isObject() && result.contains(key) && result.value(key).isObject()) {
+            // Recursively merge nested objects.
+            result[key] = mergeObjects(result.value(key).toObject(),
+                                       it.value().toObject());
+        } else {
+            // Scalar, array, or key not in base: overlay wins.
+            result[key] = it.value();
+        }
+    }
+    return result;
 }
 
 

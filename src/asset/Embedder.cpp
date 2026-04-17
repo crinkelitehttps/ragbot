@@ -1,7 +1,8 @@
-// Modified to use local llama-swap embedding server
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include "Embedder.h"
 #include "../parsers/ParserJSON.h"
@@ -50,6 +51,7 @@ Embedder::Embedder(const QJsonObject& config)
     if (config.value("skipIndex").toBool(false)) {
         qDebug() << "Embedder: skipping index pass (-s flag set)";
     } else {
+        buildObjectRegistry();
         processAllFiles();
     }
 }
@@ -152,8 +154,34 @@ auto Embedder::search(const QString& query, int topK)
 
 
 //--------------------------------------------------------------------------------
-auto Embedder::generationEmbed(const QString& generation) -> void
+auto Embedder::buildObjectRegistry() -> void
 {
-    Q_UNUSED(generation)
-    qDebug() << "Embedder::generationEmbed() [ not implemented ]";
+    QHash<QString, QJsonObject> registry;
+
+    QDirIterator it(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        QFile file(it.next());
+        if (!file.open(QIODevice::ReadOnly)) continue;
+
+        const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        file.close();
+
+        auto registerObject = [&](const QJsonObject& obj) {
+            // Objects can have either "id" (concrete) or "abstract" (template).
+            const QString id = obj.value("id").toString(
+                                   obj.value("abstract").toString());
+            if (!id.isEmpty()) registry.insert(id, obj);
+        };
+
+        if (doc.isArray()) {
+            for (const QJsonValue& val : doc.array()) {
+                if (val.isObject()) registerObject(val.toObject());
+            }
+        } else if (doc.isObject()) {
+            registerObject(doc.object());
+        }
+    }
+
+    qDebug() << "Embedder::buildObjectRegistry():" << registry.size() << "objects registered";
+    m_parser->setObjectRegistry(registry);
 }

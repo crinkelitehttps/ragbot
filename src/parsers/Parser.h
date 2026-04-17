@@ -2,7 +2,8 @@
 #define PARSER_H
 
 #include <QString>
-#include <QJsonValue>
+#include <QJsonObject>
+#include <QHash>
 
 class Parser
 {
@@ -14,6 +15,10 @@ public:
 
     virtual ~Parser() = default;
     virtual auto toChunks(const QVariant& dataVariant) -> QVector<Chunk> = 0;
+
+    // Optional: provide a global id→object registry so the parser can resolve
+    // inheritance (e.g. CDDA's copy-from). Default is a no-op.
+    virtual void setObjectRegistry(const QHash<QString, QJsonObject>&) {}
 
 protected:
     Parser() {}
