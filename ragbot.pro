@@ -5,7 +5,6 @@ CONFIG -= app_bundle
 CONFIG += debug
 CONFIG -= release
 
-# Source files
 SOURCES += \
     src/main.cpp \
     src/RAGBot.cpp \
@@ -15,10 +14,11 @@ SOURCES += \
     src/db/EmbeddingDatabase.cpp \
     src/db/RoleplayDatabase.cpp \
     src/db/VectorIndex.cpp \
+    src/generation/GeneratorFactory.cpp \
     src/generation/GeneratorIP.cpp \
+    src/parsers/CDDAResolver.cpp \
     src/parsers/ParserJSON.cpp
 
-# Header files
 HEADERS += \
     src/RAGBot.h \
     src/asset/Embedder.h \
@@ -27,21 +27,28 @@ HEADERS += \
     src/db/EmbeddingDatabase.h \
     src/db/RoleplayDatabase.h \
     src/db/VectorIndex.h \
-    src/generation/Generator.h \
+    src/generation/EmbeddingGenerator.h \
+    src/generation/GeneratorFactory.h \
     src/generation/GeneratorIP.h \
+    src/generation/TextGenerator.h \
+    src/parsers/CDDAResolver.h \
     src/parsers/Parser.h \
     src/parsers/ParserJSON.h
 
 # ---------------------------------------------------------------------------
-# Embedded inference (optional) — build with: qmake CONFIG+=embedded_inference
-# Requires pre-built llama.cpp static libraries at the paths below.
-# Without this flag the binary only supports network-based generators (GeneratorIP).
+# Embedded inference — build with: qmake CONFIG+=embedded_inference
+# Without this flag only network-backed generators (GeneratorIP) are available.
 # ---------------------------------------------------------------------------
 embedded_inference {
     DEFINES += RAGBOT_EMBEDDED_INFERENCE
 
-    SOURCES += src/generation/GeneratorEmbedded.cpp
-    HEADERS += src/generation/GeneratorEmbedded.h
+    SOURCES += \
+        src/generation/EmbeddedEmbeddingGenerator.cpp \
+        src/generation/EmbeddedTextGenerator.cpp
+
+    HEADERS += \
+        src/generation/EmbeddedEmbeddingGenerator.h \
+        src/generation/EmbeddedTextGenerator.h
 
     INCLUDEPATH += /home/joe/source/llama.cpp/include
     INCLUDEPATH += /home/joe/source/llama.cpp/common
@@ -56,19 +63,14 @@ embedded_inference {
     LIBS += -lopenblas -lgomp -lvulkan
 }
 
-# Include paths
-# Force Qt from home directory, NOT system repos
 QT_ROOT = /home/joe/Qt/5.15.2/gcc_64
-message("Using Qt from: $QT_ROOT")
+message("Using Qt from: $$QT_ROOT")
 
-# Override system Qt paths
 QMAKE_INCDIR = $${QT_ROOT}/include
 QMAKE_LIBDIR = $${QT_ROOT}/lib
 
-# Explicitly prepend custom Qt to include and lib paths
-INCLUDEPATH = $${QT_ROOT}/include $$INCLUDEPATH
+INCLUDEPATH  = $${QT_ROOT}/include $$INCLUDEPATH
 INCLUDEPATH += $${QT_ROOT}/include/QtCore
-INCLUDEPATH += $${QT_ROOT}/include/QtSql
 INCLUDEPATH += $${QT_ROOT}/include/QtNetwork
 
 LIBS += -lpthread -ldl -lm -lstdc++ -lsqlite3

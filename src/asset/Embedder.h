@@ -1,40 +1,37 @@
 #ifndef EMBEDDER_H
 #define EMBEDDER_H
 
+#include <memory>
+#include <QFile>
 #include <QHash>
 #include <QJsonObject>
-#include <QFile>
-#include "../generation/Generator.h"
+#include "../generation/EmbeddingGenerator.h"
 #include "../db/EmbeddingDatabase.h"
+#include "../parsers/CDDAResolver.h"
 #include "../parsers/Parser.h"
 
 class Embedder
 {
 public:
-    Embedder(const QJsonObject& embedderConfig);
-    ~Embedder() = default;
-
-    auto processAllFiles() -> void;
+    explicit Embedder(const QJsonObject& config);
 
     // Embeds query and returns the top-K most similar stored chunks.
-    auto search(const QString& query, int topK = 10)
-        -> QVector<EmbeddingDatabase::SearchResult>;
-
-    // Returns true if the file was newly indexed, false if already up-to-date.
-    auto fileEmbed(QFile& file) -> bool;
+    auto search(const QString& query, int topK = 10) -> QVector<EmbeddingDatabase::SearchResult>;
 
     [[nodiscard]] auto isValid() const -> bool { return m_isValid; }
 
 private:
-    // First pass: scan all JSON files and build a complete id→object registry
-    // so the parser can resolve copy-from inheritance chains.
-    auto buildObjectRegistry() -> void;
+    auto processAllFiles() -> void;
 
-    EmbeddingDatabase m_db;
-    QString           m_files;
-    Generator*        m_generator {};
-    bool              m_isValid {};
-    Parser*           m_parser {};
+    // Returns true if the file was newly indexed, false if already up-to-date.
+    auto fileEmbed(QFile& file) -> bool;
+
+    EmbeddingDatabase                   m_db;
+    QString                             m_files;
+    std::unique_ptr<EmbeddingGenerator> m_generator;
+    std::unique_ptr<Parser>             m_parser;
+    CDDAResolver::Registry              m_registry;
+    bool                                m_isValid { false };
 };
 
 #endif // EMBEDDER_H

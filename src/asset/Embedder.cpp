@@ -1,57 +1,41 @@
+#include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QJsonObject>
+#include <QDebug>
 #include "Embedder.h"
+#include "../generation/GeneratorFactory.h"
 #include "../parsers/ParserJSON.h"
-#ifdef RAGBOT_EMBEDDED_INFERENCE
-#include "../generation/GeneratorEmbedded.h"
-#endif
-#include "../generation/GeneratorIP.h"
 
 
 //--------------------------------------------------------------------------------
 Embedder::Embedder(const QJsonObject& config)
     : m_db(config)
     , m_files(config.value("files").toString())
-    , m_isValid(false)
-    , m_parser(new ParserJSON())
+    , m_generator(GeneratorFactory::createEmbedding(config.value("generator").toObject()))
+    , m_parser(std::make_unique<ParserJSON>())
 {
     if (config.isEmpty()) {
-        qWarning() << "Embedder::Embedder(): empty config";
+        qWarning() << "Embedder: empty config";
         return;
     }
-
     if (!m_db.isOpen()) {
-        qWarning() << "Embedder::Embedder(): database did not open";
+        qWarning() << "Embedder: database did not open";
         return;
     }
-
-    const QJsonObject generatorConfig = config.value("generator").toObject();
-    if (generatorConfig.value("isImmediate").toBool(false)) {
-#ifdef RAGBOT_EMBEDDED_INFERENCE
-        m_generator = new GeneratorEmbedded(generatorConfig);
-#else
-        qCritical() << "Embedder: config requests embedded inference but binary was built without it";
-        return;
-#endif
-    } else {
-        m_generator = new GeneratorIP(generatorConfig);
-    }
-
-    if (m_generator == nullptr) {
-        qWarning() << "Embedder::Embedder(): failed to create generator";
+    if (!m_generator || !m_generator->isValid()) {
+        qWarning() << "Embedder: generator failed to initialise";
         return;
     }
 
     m_isValid = true;
 
     if (config.value("skipIndex").toBool(false)) {
-        qDebug() << "Embedder: skipping index pass (-s flag set)";
+        qDebug() << "Embedder: skipping index pass (-s flag)";
     } else {
-        buildObjectRegistry();
+        m_registry = CDDAResolver::buildRegistry(m_files);
         processAllFiles();
     }
 }
@@ -60,34 +44,24 @@ Embedder::Embedder(const QJsonObject& config)
 //--------------------------------------------------------------------------------
 void Embedder::processAllFiles()
 {
-    // Count files first so we can log progress as N/total.
     int total = 0;
-    QDirIterator countIt(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
-    while (countIt.hasNext()) { countIt.next(); ++total; }
+    {
+        QDirIterator c(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
+        while (c.hasNext()) { c.next(); ++total; }
+    }
+    qDebug() << "Embedder::processAllFiles():" << total << "JSON files in" << m_files;
 
-    qDebug() << "Embedder::processAllFiles(): found" << total << "JSON files in" << m_files;
-
-    int indexed = 0;
-    int skipped = 0;
-    int processed = 0;
-
+    int indexed = 0, skipped = 0, n = 0;
     QDirIterator it(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
     while (it.hasNext()) {
-        const QString filePath = it.next();
-        ++processed;
-
-        qDebug() << QString("[%1/%2] %3")
-            .arg(processed).arg(total)
-            .arg(QFileInfo(filePath).fileName());
-
-        QFile file(filePath);
-        const bool wasNew = fileEmbed(file);
-        if (wasNew) ++indexed; else ++skipped;
+        QFile file(it.next());
+        qDebug() << QString("[%1/%2] %3").arg(++n).arg(total)
+                                         .arg(QFileInfo(file.fileName()).fileName());
+        if (fileEmbed(file)) ++indexed; else ++skipped;
     }
 
     qDebug() << "Embedder::processAllFiles(): done —"
-             << indexed << "newly indexed,"
-             << skipped << "already up-to-date";
+             << indexed << "newly indexed," << skipped << "already up-to-date";
 }
 
 
@@ -98,36 +72,40 @@ auto Embedder::fileEmbed(QFile& file) -> bool
         qWarning() << "Embedder::fileEmbed(): cannot open" << file.fileName();
         return false;
     }
-
     const QByteArray fileData = file.readAll();
     file.close();
 
     QCryptographicHash hash(QCryptographicHash::Md5);
     hash.addData(fileData);
-    const QByteArray fileHash = hash.result().toHex();
+    const int sourceId = m_db.newSourceFileId(hash.result().toHex(), file.fileName());
+    if (sourceId < 0) return false; // unchanged since last index
 
-    const int sourceId = m_db.newSourceFileId(fileHash, file.fileName());
-    if (sourceId < 0) {
-        // -1 means the checksum already exists in the database — skip re-embedding.
-        return false;
+    const QJsonDocument doc = QJsonDocument::fromJson(fileData);
+    QVector<QJsonObject> objects;
+    if (doc.isArray()) {
+        for (const QJsonValue& v : doc.array())
+            if (v.isObject()) objects << v.toObject();
+    } else if (doc.isObject()) {
+        objects << doc.object();
     }
 
-    int chunksAdded = 0;
-    for (const Parser::Chunk& chunk : m_parser->toChunks(QVariant(QString::fromUtf8(fileData)))) {
-        // "search_document: " is the Nomic embedding task prefix for indexed content.
-        const QVector<float> embedding = m_generator->generate("search_document: " + chunk.embedText);
+    int added = 0;
+    for (const QJsonObject& raw : objects) {
+        if (raw.value("abstract").toBool(false)) continue; // base templates — not indexed
 
+        const QJsonObject resolved = CDDAResolver::resolve(raw, m_registry);
+        const Parser::Chunk chunk  = m_parser->objectToChunk(resolved);
+
+        // Nomic embed task prefix for indexed content.
+        const QVector<float> embedding = m_generator->generate("search_document: " + chunk.embedText);
         if (embedding.isEmpty()) {
-            qWarning() << "Embedder::fileEmbed(): empty embedding returned for chunk";
+            qWarning() << "Embedder::fileEmbed(): empty embedding for chunk";
             continue;
         }
-
-        if (m_db.embeddingSave(sourceId, embedding, chunk.content)) {
-            ++chunksAdded;
-        }
+        if (m_db.embeddingSave(sourceId, embedding, chunk.content)) ++added;
     }
 
-    qDebug() << "Embedder::fileEmbed(): indexed" << chunksAdded
+    qDebug() << "Embedder::fileEmbed(): indexed" << added
              << "chunks from" << QFileInfo(file.fileName()).fileName();
     return true;
 }
@@ -142,7 +120,6 @@ auto Embedder::search(const QString& query, int topK)
         return {};
     }
 
-    // "search_query: " is the Nomic task prefix for query embeddings.
     const QVector<float> embedding = m_generator->generate("search_query: " + query);
     if (embedding.isEmpty()) {
         qWarning() << "Embedder::search(): failed to embed query";
@@ -150,38 +127,4 @@ auto Embedder::search(const QString& query, int topK)
     }
 
     return m_db.textResults(embedding, topK);
-}
-
-
-//--------------------------------------------------------------------------------
-auto Embedder::buildObjectRegistry() -> void
-{
-    QHash<QString, QJsonObject> registry;
-
-    QDirIterator it(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        QFile file(it.next());
-        if (!file.open(QIODevice::ReadOnly)) continue;
-
-        const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-        file.close();
-
-        auto registerObject = [&](const QJsonObject& obj) {
-            // Objects can have either "id" (concrete) or "abstract" (template).
-            const QString id = obj.value("id").toString(
-                                   obj.value("abstract").toString());
-            if (!id.isEmpty()) registry.insert(id, obj);
-        };
-
-        if (doc.isArray()) {
-            for (const QJsonValue& val : doc.array()) {
-                if (val.isObject()) registerObject(val.toObject());
-            }
-        } else if (doc.isObject()) {
-            registerObject(doc.object());
-        }
-    }
-
-    qDebug() << "Embedder::buildObjectRegistry():" << registry.size() << "objects registered";
-    m_parser->setObjectRegistry(registry);
 }
