@@ -71,16 +71,38 @@ auto CDDAResolver::mergeObjects(const QJsonObject& base, const QJsonObject& over
 {
     QJsonObject result = base;
     for (auto it = overlay.begin(); it != overlay.end(); ++it) {
-        if (it.key() == "copy-from") continue;
+        const QString& key = it.key();
+        if (key == "copy-from" || key == "relative" || key == "proportional") continue;
 
         if (it.value().isObject()
-                && result.contains(it.key())
-                && result.value(it.key()).isObject()) {
-            result[it.key()] = mergeObjects(result.value(it.key()).toObject(),
-                                            it.value().toObject());
+                && result.contains(key)
+                && result.value(key).isObject()) {
+            result[key] = mergeObjects(result.value(key).toObject(),
+                                       it.value().toObject());
         } else {
-            result[it.key()] = it.value();
+            result[key] = it.value();
         }
     }
+
+    // "relative": { "field": delta } — add delta to the parent's value
+    if (overlay.contains("relative") && overlay.value("relative").isObject()) {
+        const QJsonObject rel = overlay.value("relative").toObject();
+        for (auto it = rel.begin(); it != rel.end(); ++it) {
+            const QJsonValue baseVal = base.value(it.key());
+            if (baseVal.isDouble() && it.value().isDouble())
+                result[it.key()] = baseVal.toDouble() + it.value().toDouble();
+        }
+    }
+
+    // "proportional": { "field": factor } — multiply the parent's value by factor
+    if (overlay.contains("proportional") && overlay.value("proportional").isObject()) {
+        const QJsonObject prop = overlay.value("proportional").toObject();
+        for (auto it = prop.begin(); it != prop.end(); ++it) {
+            const QJsonValue baseVal = base.value(it.key());
+            if (baseVal.isDouble() && it.value().isDouble())
+                result[it.key()] = qRound(baseVal.toDouble() * it.value().toDouble());
+        }
+    }
+
     return result;
 }
