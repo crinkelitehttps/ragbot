@@ -3,6 +3,7 @@
 
 #include <QHash>
 #include <QJsonObject>
+#include <QFile>
 #include "../generation/Generator.h"
 #include "../db/EmbeddingDatabase.h"
 #include "../parsers/Parser.h"
