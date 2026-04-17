@@ -4,6 +4,7 @@
 #include <memory>
 #include <QJsonObject>
 #include <QString>
+#include "../ConversationTurn.h"
 #include "../db/EmbeddingDatabase.h"
 #include "../generation/TextGenerator.h"
 
@@ -14,7 +15,8 @@ public:
 
     auto research(
         const QString& question,
-        const QVector<EmbeddingDatabase::SearchResult>& results
+        const QVector<EmbeddingDatabase::SearchResult>& results,
+        const QVector<ConversationTurn>& history
     ) -> QString;
 
 private:

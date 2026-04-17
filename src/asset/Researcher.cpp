@@ -16,7 +16,8 @@ Researcher::Researcher(const QJsonObject& config)
 //--------------------------------------------------------------------------------
 auto Researcher::research(
         const QString& question,
-        const QVector<EmbeddingDatabase::SearchResult>& results
+        const QVector<EmbeddingDatabase::SearchResult>& results,
+        const QVector<ConversationTurn>& history
 ) -> QString
 {
     if (!m_generator || !m_generator->isValid()) {
@@ -38,7 +39,13 @@ auto Researcher::research(
     }
     qDebug() << "Researcher::research(): total context" << context.size() << "chars";
 
-    const QString prompt = "Context:\n" + context + "\nQuestion: " + question;
+    QString prompt;
+    if (!history.isEmpty()) {
+        prompt += "Prior conversation:\n";
+        for (const auto& turn : history)
+            prompt += "Q: " + turn.question + "\nA: " + turn.researchAnswer + "\n\n";
+    }
+    prompt += "Context:\n" + context + "\nQuestion: " + question;
 
     QTextStream(stdout) << "\nResearcher: " << Qt::flush;
     const QString answer = m_generator->generateText(m_instruction, /*stream=*/true, prompt);

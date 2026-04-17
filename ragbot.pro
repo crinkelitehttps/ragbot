@@ -20,6 +20,7 @@ SOURCES += \
     src/parsers/ParserJSON.cpp
 
 HEADERS += \
+    src/ConversationTurn.h \
     src/RAGBot.h \
     src/asset/Embedder.h \
     src/asset/Researcher.h \

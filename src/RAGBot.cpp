@@ -47,14 +47,18 @@ auto RAGBot::processQuestion(const QString& question) -> void
     qDebug() << "RAGBot::processQuestion():" << results.size() << "chunks retrieved";
 
     // Stage 2: synthesise a factual answer from the retrieved context.
-    const QString researchAnswer = m_researcher.research(question, results);
+    const QString researchAnswer = m_researcher.research(question, results, m_history);
     if (researchAnswer.isEmpty()) {
         qWarning() << "RAGBot::processQuestion(): researcher returned empty answer";
         return;
     }
 
     // Stage 3: deliver the answer in-character.
-    const QString roleplayAnswer = m_roleplayer.respond(researchAnswer, question);
+    const QString roleplayAnswer = m_roleplayer.respond(researchAnswer, question, m_history);
 
     m_roleplayDb.logConversation(m_embedder.lastQueryEmbedding(), question, researchAnswer, roleplayAnswer);
+
+    m_history.append({question, researchAnswer, roleplayAnswer});
+    if (m_history.size() > MaxHistoryTurns)
+        m_history.removeFirst();
 }

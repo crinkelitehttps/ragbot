@@ -4,6 +4,7 @@
 #include <memory>
 #include <QJsonObject>
 #include <QString>
+#include "../ConversationTurn.h"
 #include "../generation/TextGenerator.h"
 
 class Roleplayer
@@ -11,7 +12,11 @@ class Roleplayer
 public:
     explicit Roleplayer(const QJsonObject& config);
 
-    auto respond(const QString& researchAnswer, const QString& question) -> QString;
+    auto respond(
+        const QString& researchAnswer,
+        const QString& question,
+        const QVector<ConversationTurn>& history
+    ) -> QString;
 
     [[nodiscard]] auto characterName() const -> const QString& { return m_characterName; }
 
