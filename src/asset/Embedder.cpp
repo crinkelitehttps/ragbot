@@ -44,19 +44,19 @@ Embedder::Embedder(const QJsonObject& config)
 //--------------------------------------------------------------------------------
 void Embedder::processAllFiles()
 {
-    int total = 0;
-    {
-        QDirIterator c(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
-        while (c.hasNext()) { c.next(); ++total; }
-    }
+    QStringList paths;
+    QDirIterator it(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext())
+        paths << it.next();
+
+    const int total = paths.size();
     qDebug() << "Embedder::processAllFiles():" << total << "JSON files in" << m_files;
 
     int indexed = 0, skipped = 0, n = 0;
-    QDirIterator it(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        QFile file(it.next());
+    for (const QString& path : paths) {
+        QFile file(path);
         qDebug() << QString("[%1/%2] %3").arg(++n).arg(total)
-                                         .arg(QFileInfo(file.fileName()).fileName());
+                                         .arg(QFileInfo(path).fileName());
         if (fileEmbed(file)) ++indexed; else ++skipped;
     }
 
