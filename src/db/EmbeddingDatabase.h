@@ -42,6 +42,13 @@ public:
         int topK = DefaultTopK
     ) -> QVector<SearchResult>;
 
+    // Transaction helpers for atomic per-file indexing.  If commit is never
+    // called (e.g. on error), rollback reverts both the SQLite writes and any
+    // in-memory VectorIndex entries added since beginFileTransaction().
+    auto beginFileTransaction()    -> bool;
+    auto commitFileTransaction()   -> bool;
+    auto rollbackFileTransaction() -> void;
+
     [[nodiscard]] auto isOpen() const -> bool { return m_db != nullptr; }
 
 private:
@@ -56,6 +63,7 @@ private:
 
     VectorIndex m_index;
     sqlite3*    m_db {};
+    int64_t     m_txIndexSnapshot { -1 }; // ntotal() at the start of the current file transaction
 
     // Increment this whenever the table definitions change.
     // A mismatch triggers a full schema rebuild (all data is re-indexed).

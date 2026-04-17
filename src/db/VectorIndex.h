@@ -31,6 +31,10 @@ public:
     // Grows the internal store as needed; gaps are left as empty slots.
     auto load(int64_t id, const QVector<float>& vec) -> void;
 
+    // Truncates the index back to priorSize, undoing any add() calls since
+    // that snapshot was taken.  Used to roll back a failed indexing transaction.
+    auto rollbackTo(int64_t priorSize) -> void;
+
     // Returns up to topK hits ordered by descending similarity.
     // Returns an empty vector if the index is empty or dimensions mismatch.
     [[nodiscard]] auto search(const QVector<float>& query, int topK) const -> QVector<Hit>;

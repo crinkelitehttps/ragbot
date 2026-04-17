@@ -77,8 +77,14 @@ auto Embedder::fileEmbed(QFile& file) -> bool
 
     QCryptographicHash hash(QCryptographicHash::Md5);
     hash.addData(fileData);
+
+    m_db.beginFileTransaction();
+
     const int sourceId = m_db.newSourceFileId(hash.result().toHex(), file.fileName());
-    if (sourceId < 0) return false; // unchanged since last index
+    if (sourceId < 0) {
+        m_db.rollbackFileTransaction(); // nothing was written; clean up the transaction
+        return false; // unchanged since last index
+    }
 
     const QJsonDocument doc = QJsonDocument::fromJson(fileData);
     QVector<QJsonObject> objects;
@@ -99,10 +105,18 @@ auto Embedder::fileEmbed(QFile& file) -> bool
         // Nomic embed task prefix for indexed content.
         const QVector<float> embedding = m_generator->generate("search_document: " + chunk.embedText);
         if (embedding.isEmpty()) {
-            qWarning() << "Embedder::fileEmbed(): empty embedding for chunk";
-            continue;
+            qWarning() << "Embedder::fileEmbed(): empty embedding for chunk — aborting file";
+            m_db.rollbackFileTransaction();
+            return false;
         }
         if (m_db.embeddingSave(sourceId, embedding, chunk.content)) ++added;
+    }
+
+    if (!m_db.commitFileTransaction()) {
+        qWarning() << "Embedder::fileEmbed(): commit failed —"
+                   << QFileInfo(file.fileName()).fileName();
+        m_db.rollbackFileTransaction();
+        return false;
     }
 
     qDebug() << "Embedder::fileEmbed(): indexed" << added

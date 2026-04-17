@@ -242,6 +242,32 @@ auto EmbeddingDatabase::embeddingSave(
 
 
 //--------------------------------------------------------------------------------
+auto EmbeddingDatabase::beginFileTransaction() -> bool
+{
+    m_txIndexSnapshot = m_index.ntotal();
+    return exec("BEGIN;");
+}
+
+
+//--------------------------------------------------------------------------------
+auto EmbeddingDatabase::commitFileTransaction() -> bool
+{
+    m_txIndexSnapshot = -1;
+    return exec("COMMIT;");
+}
+
+
+//--------------------------------------------------------------------------------
+auto EmbeddingDatabase::rollbackFileTransaction() -> void
+{
+    exec("ROLLBACK;");
+    if (m_txIndexSnapshot >= 0)
+        m_index.rollbackTo(m_txIndexSnapshot);
+    m_txIndexSnapshot = -1;
+}
+
+
+//--------------------------------------------------------------------------------
 auto EmbeddingDatabase::textResults(
     const QVector<float>& queryEmbedding,
     int topK

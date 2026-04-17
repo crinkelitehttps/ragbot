@@ -39,6 +39,14 @@ auto VectorIndex::load(int64_t id, const QVector<float>& vec) -> void
 
 
 //--------------------------------------------------------------------------------
+auto VectorIndex::rollbackTo(int64_t priorSize) -> void
+{
+    if (priorSize >= 0 && priorSize < static_cast<int64_t>(m_vectors.size()))
+        m_vectors.resize(static_cast<int>(priorSize));
+}
+
+
+//--------------------------------------------------------------------------------
 auto VectorIndex::search(const QVector<float>& query, int topK) const -> QVector<Hit>
 {
     if (query.size() != m_dimensions || m_vectors.isEmpty()) return {};
