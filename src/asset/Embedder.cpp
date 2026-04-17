@@ -5,7 +5,9 @@
 #include <QJsonObject>
 #include "Embedder.h"
 #include "../parsers/ParserJSON.h"
-#include "../generation/GeneratorImmediate.h"
+#ifdef RAGBOT_EMBEDDED_INFERENCE
+#include "../generation/GeneratorEmbedded.h"
+#endif
 #include "../generation/GeneratorIP.h"
 
 
@@ -28,7 +30,12 @@ Embedder::Embedder(const QJsonObject& config)
 
     const QJsonObject generatorConfig = config.value("generator").toObject();
     if (generatorConfig.value("isImmediate").toBool(false)) {
-        m_generator = new GeneratorImmediate(generatorConfig);
+#ifdef RAGBOT_EMBEDDED_INFERENCE
+        m_generator = new GeneratorEmbedded(generatorConfig);
+#else
+        qCritical() << "Embedder: config requests embedded inference but binary was built without it";
+        return;
+#endif
     } else {
         m_generator = new GeneratorIP(generatorConfig);
     }
