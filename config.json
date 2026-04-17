@@ -14,7 +14,9 @@
       "modelPath": "/home/joe/Downloads/Qwen3.5-9B-Q5_K_S.gguf",
       "temperature": 0.7,
       "topP": 0.9,
-      "repeatPenalty": 1.1
+      "repeatPenalty": 1.1,
+      "maxTokens": 1024,
+      "enableThinking": false
     }
   },
   "roleplayer": {
@@ -25,7 +27,9 @@
       "modelPath": "/home/joe/Downloads/Qwen3.5-9B-Q5_K_S.gguf",
       "temperature": 0.7,
       "topP": 0.9,
-      "repeatPenalty": 1.1
+      "repeatPenalty": 1.1,
+      "maxTokens": 1024,
+      "enableThinking": false
     }
   }
 }

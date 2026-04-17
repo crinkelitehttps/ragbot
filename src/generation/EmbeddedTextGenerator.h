@@ -26,7 +26,7 @@ public:
     [[nodiscard]] auto isValid() const -> bool override { return m_isValid; }
 
 private:
-    static constexpr int   DefaultMaxTokenGen  { 512 };
+    static constexpr int   DefaultMaxTokenGen  { 1024 };
     static constexpr int   DefaultBufferLength { 128 };
     static constexpr int   DefaultBatch        { 512 };
     static constexpr int   DefaultCtx          { 8192 };
@@ -36,10 +36,12 @@ private:
 
     llama_context* m_ctx   {};
     llama_model*   m_model {};
-    bool           m_isValid { false };
-    float          m_temperature  { DefaultTemperature };
-    float          m_topP         { DefaultTopP };
-    float          m_repeatPenalty{ DefaultRepeatPenalty };
+    bool           m_isValid        { false };
+    bool           m_enableThinking { false };
+    int            m_maxTokenGen    { DefaultMaxTokenGen };
+    float          m_temperature    { DefaultTemperature };
+    float          m_topP           { DefaultTopP };
+    float          m_repeatPenalty  { DefaultRepeatPenalty };
 };
 
 #endif // EMBEDDEDTEXTGENERATOR_H

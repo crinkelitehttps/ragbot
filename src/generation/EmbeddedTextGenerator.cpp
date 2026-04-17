@@ -26,6 +26,8 @@ EmbeddedTextGenerator::EmbeddedTextGenerator(const QJsonObject& config)
     m_temperature   = static_cast<float>(config.value("temperature"  ).toDouble(DefaultTemperature));
     m_topP          = static_cast<float>(config.value("topP"         ).toDouble(DefaultTopP));
     m_repeatPenalty = static_cast<float>(config.value("repeatPenalty").toDouble(DefaultRepeatPenalty));
+    m_maxTokenGen   = config.value("maxTokens"     ).toInt(DefaultMaxTokenGen);
+    m_enableThinking = config.value("enableThinking").toBool(false);
 
     const QString modelPath = config.value("modelPath").toString();
     if (modelPath.isEmpty()) {
@@ -70,9 +72,11 @@ auto EmbeddedTextGenerator::generateText(
     if (!m_isValid) return {};
 
     // ChatML format — compatible with Qwen3, Mistral-Instruct, and most modern models.
+    // Qwen3's /no_think suffix suppresses the <think> reasoning block.
+    const QString userTurn = m_enableThinking ? prompt : prompt + " /no_think";
     const QString fullPrompt =
         "<|im_start|>system\n" + systemPrompt + "<|im_end|>\n"
-        "<|im_start|>user\n"   + prompt       + "<|im_end|>\n"
+        "<|im_start|>user\n"   + userTurn     + "<|im_end|>\n"
         "<|im_start|>assistant\n";
 
     auto vtok = common_tokenize(m_ctx, fullPrompt.toStdString(), true, true);
@@ -106,7 +110,7 @@ auto EmbeddedTextGenerator::generateText(
     const llama_vocab* vocab = llama_model_get_vocab(m_model);
 
     QString response;
-    for (int n = 0; n < DefaultMaxTokenGen; ++n) {
+    for (int n = 0; n < m_maxTokenGen; ++n) {
         llama_token tok = llama_sampler_sample(sampler, m_ctx, -1);
 
         if (llama_vocab_is_eog(vocab, tok)) break;
