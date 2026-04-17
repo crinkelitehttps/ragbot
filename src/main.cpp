@@ -2,7 +2,7 @@
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFile>
-#include <QTimer>
+#include <QThread>
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -90,33 +90,43 @@ auto main(int argc, char *argv[]) -> int
         root["embedder"] = embedderConfig;
     }
 
-    Embedder embedder(root.value("embedder").toObject());
-    if (!embedder.isValid()) {
-        qWarning() << "main: failed to construct embedder";
-        return 1;
-    }
-    qDebug() << "main: embedder ready";
+    const bool loadOnly = cli.isSet(loadOpt);
 
-    // -l / --load: finish once the index is built, don't start the chat loop.
-    if (cli.isSet(loadOpt)) {
-        qDebug() << "main: load-only mode complete";
-        return 0;
-    }
+    // All heavy objects (and their QNetworkAccessManagers) live on the worker thread.
+    // The main thread runs app.exec() unblocked; the worker blocks on stdin between turns.
+    QThread* worker = QThread::create([root, loadOnly]() {
+        Embedder embedder(root.value("embedder").toObject());
+        if (!embedder.isValid()) {
+            qWarning() << "main: failed to construct embedder";
+            QCoreApplication::exit(1);
+            return;
+        }
+        qDebug() << "main: embedder ready";
 
-    Researcher researcher(root.value("researcher").toObject());
-    qDebug() << "main: researcher ready";
+        if (loadOnly) {
+            qDebug() << "main: load-only mode complete";
+            QCoreApplication::quit();
+            return;
+        }
 
-    Roleplayer roleplayer(root.value("roleplayer").toObject());
-    qDebug() << "main: roleplayer ready";
+        Researcher researcher(root.value("researcher").toObject());
+        qDebug() << "main: researcher ready";
 
-    RoleplayDatabase roleplayDb(root.value("conversationsDb").toString("conversations.db"));
-    qDebug() << "main: roleplay database ready";
+        Roleplayer roleplayer(root.value("roleplayer").toObject());
+        qDebug() << "main: roleplayer ready";
 
-    RAGBot ragbot(embedder, researcher, roleplayer, roleplayDb);
+        RoleplayDatabase roleplayDb(root.value("conversationsDb").toString("conversations.db"));
+        qDebug() << "main: roleplay database ready";
 
-    // Defer start() until after the event loop is running so that
-    // QNetworkAccessManager (used inside generators) works correctly.
-    QTimer::singleShot(0, [&ragbot]() { ragbot.start(); });
+        RAGBot ragbot(embedder, researcher, roleplayer, roleplayDb);
+        ragbot.start();
+    });
 
-    return app.exec();
+    QObject::connect(worker, &QThread::finished, &app, &QCoreApplication::quit);
+    worker->start();
+
+    const int exitCode = app.exec();
+    worker->wait();
+    delete worker;
+    return exitCode;
 }

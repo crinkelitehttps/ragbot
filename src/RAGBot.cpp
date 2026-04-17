@@ -1,4 +1,3 @@
-#include <QCoreApplication>
 #include <QDebug>
 #include <QTextStream>
 #include "RAGBot.h"
@@ -31,8 +30,6 @@ void RAGBot::start()
         }
         processQuestion(question);
     }
-
-    QCoreApplication::quit();
 }
 
 
