@@ -8,6 +8,7 @@
 #include <QJsonObject>
 
 #include "asset/Embedder.h"
+#include "db/RoleplayDatabase.h"
 #include "RAGBot.h"
 
 auto main(int argc, char *argv[]) -> int
@@ -108,7 +109,10 @@ auto main(int argc, char *argv[]) -> int
     Roleplayer roleplayer(root.value("roleplayer").toObject());
     qDebug() << "main: roleplayer ready";
 
-    RAGBot ragbot(embedder, researcher, roleplayer);
+    RoleplayDatabase roleplayDb(root.value("conversationsDb").toString("conversations.db"));
+    qDebug() << "main: roleplay database ready";
+
+    RAGBot ragbot(embedder, researcher, roleplayer, roleplayDb);
 
     // Defer start() until after the event loop is running so that
     // QNetworkAccessManager (used inside generators) works correctly.

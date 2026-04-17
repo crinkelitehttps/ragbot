@@ -4,10 +4,12 @@
 #include "RAGBot.h"
 
 //--------------------------------------------------------------------------------
-RAGBot::RAGBot(Embedder& embedder, Researcher& researcher, Roleplayer& roleplayer)
+RAGBot::RAGBot(Embedder& embedder, Researcher& researcher, Roleplayer& roleplayer,
+               RoleplayDatabase& roleplayDb)
     : m_embedder(embedder)
     , m_researcher(researcher)
     , m_roleplayer(roleplayer)
+    , m_roleplayDb(roleplayDb)
 {
     qDebug() << "RAGBot::RAGBot()";
 }
@@ -55,5 +57,7 @@ auto RAGBot::processQuestion(const QString& question) -> void
     }
 
     // Stage 3: deliver the answer in-character.
-    m_roleplayer.respond(researchAnswer, question);
+    const QString roleplayAnswer = m_roleplayer.respond(researchAnswer, question);
+
+    m_roleplayDb.logConversation(m_embedder.lastQueryEmbedding(), question, researchAnswer, roleplayAnswer);
 }

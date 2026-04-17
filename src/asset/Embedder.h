@@ -18,6 +18,8 @@ public:
     // Embeds query and returns the top-K most similar stored chunks.
     auto search(const QString& query, int topK = 10) -> QVector<EmbeddingDatabase::SearchResult>;
 
+    [[nodiscard]] auto lastQueryEmbedding() const -> const QVector<float>& { return m_lastQueryEmbedding; }
+
     [[nodiscard]] auto isValid() const -> bool { return m_isValid; }
 
 private:
@@ -31,6 +33,7 @@ private:
     std::unique_ptr<EmbeddingGenerator> m_generator;
     std::unique_ptr<Parser>             m_parser;
     CDDAResolver::Registry              m_registry;
+    QVector<float>                      m_lastQueryEmbedding;
     bool                                m_isValid { false };
 };
 

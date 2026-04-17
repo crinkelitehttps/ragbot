@@ -134,11 +134,11 @@ auto Embedder::search(const QString& query, int topK)
         return {};
     }
 
-    const QVector<float> embedding = m_generator->generate("search_query: " + query);
-    if (embedding.isEmpty()) {
+    m_lastQueryEmbedding = m_generator->generate("search_query: " + query);
+    if (m_lastQueryEmbedding.isEmpty()) {
         qWarning() << "Embedder::search(): failed to embed query";
         return {};
     }
 
-    return m_db.textResults(embedding, topK);
+    return m_db.textResults(m_lastQueryEmbedding, topK);
 }
