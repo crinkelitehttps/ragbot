@@ -75,7 +75,7 @@ auto Embedder::fileEmbed(QFile& file) -> bool
     const QByteArray fileData = file.readAll();
     file.close();
 
-    QCryptographicHash hash(QCryptographicHash::Md5);
+    QCryptographicHash hash(QCryptographicHash::Sha256);
     hash.addData(fileData);
 
     m_db.beginFileTransaction();

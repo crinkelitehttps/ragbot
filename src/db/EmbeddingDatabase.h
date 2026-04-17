@@ -67,7 +67,7 @@ private:
 
     // Increment this whenever the table definitions change.
     // A mismatch triggers a full schema rebuild (all data is re-indexed).
-    static constexpr int SchemaVersion { 4 };
+    static constexpr int SchemaVersion { 5 };
 
     static constexpr int Dimensions { 768 };
     static constexpr int DefaultTopK { 10 };
