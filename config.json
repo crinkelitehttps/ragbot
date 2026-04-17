@@ -1,0 +1,25 @@
+{
+  "embedder": {
+    "name": "embeddings.db",
+    "files": "/home/joe/source/Cataclysm-DDA/data/json/monsters",
+    "generator": {
+      "backend": "embedded",
+      "modelPath": "/home/joe/Downloads/nomic-embed-text-v1.5.f32.gguf"
+    }
+  },
+  "researcher": {
+    "instruction": "You are a helpful assistant analyzing Cataclysm: Dark Days Ahead game data. Answer the question using only the provided context. Be factual and concise.",
+    "generator": {
+      "backend": "embedded",
+      "modelPath": "/home/joe/Downloads/Qwen3.5-0.8B-UD-Q4_K_XL.gguf"
+    }
+  },
+  "roleplayer": {
+    "characterName": "Survivor",
+    "characterBackground": "You are a survivor in a post-apocalyptic world overrun by zombies. You speak from direct experience — gritty, practical, and occasionally darkly humorous. Never break character.",
+    "generator": {
+      "backend": "embedded",
+      "modelPath": "/home/joe/Downloads/Qwen3.5-0.8B-UD-Q4_K_XL.gguf"
+    }
+  }
+}

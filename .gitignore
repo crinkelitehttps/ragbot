@@ -1,0 +1,21 @@
+# qmake / build
+.qmake.stash
+src/.qmake.stash
+Makefile
+src/Makefile
+*.o
+
+# Binary
+ragbot
+
+# Generated
+compile_commands.json
+qt.conf
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Misc
+plan.txt
