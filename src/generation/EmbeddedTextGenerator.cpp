@@ -23,6 +23,10 @@ EmbeddedTextGenerator::EmbeddedTextGenerator(const QJsonObject& config)
             qCritical() << "llama.cpp:" << text;
     }, nullptr);
 
+    m_temperature   = static_cast<float>(config.value("temperature"  ).toDouble(DefaultTemperature));
+    m_topP          = static_cast<float>(config.value("topP"         ).toDouble(DefaultTopP));
+    m_repeatPenalty = static_cast<float>(config.value("repeatPenalty").toDouble(DefaultRepeatPenalty));
+
     const QString modelPath = config.value("modelPath").toString();
     if (modelPath.isEmpty()) {
         qCritical() << "EmbeddedTextGenerator: no modelPath in config";
@@ -94,7 +98,11 @@ auto EmbeddedTextGenerator::generateText(
         pos += chunk;
     }
 
-    llama_sampler* sampler = llama_sampler_init_greedy();
+    llama_sampler* sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    llama_sampler_chain_add(sampler, llama_sampler_init_penalties(64, m_repeatPenalty, 0.0f, 0.0f));
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(m_topP, 1));
+    llama_sampler_chain_add(sampler, llama_sampler_init_temp(m_temperature));
+    llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
     const llama_vocab* vocab = llama_model_get_vocab(m_model);
 
     QString response;
