@@ -111,16 +111,16 @@ auto Embedder::fileEmbed(QFile& file) -> bool
     }
 
     int chunksAdded = 0;
-    for (const QString& chunk : m_parser->toChunks(QVariant(QString::fromUtf8(fileData)))) {
+    for (const Parser::Chunk& chunk : m_parser->toChunks(QVariant(QString::fromUtf8(fileData)))) {
         // "search_document: " is the Nomic embedding task prefix for indexed content.
-        const QVector<float> embedding = m_generator->generate("search_document: " + chunk);
+        const QVector<float> embedding = m_generator->generate("search_document: " + chunk.embedText);
 
         if (embedding.isEmpty()) {
             qWarning() << "Embedder::fileEmbed(): empty embedding returned for chunk";
             continue;
         }
 
-        if (m_db.embeddingSave(sourceId, embedding, chunk)) {
+        if (m_db.embeddingSave(sourceId, embedding, chunk.content)) {
             ++chunksAdded;
         }
     }

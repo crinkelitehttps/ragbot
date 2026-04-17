@@ -11,7 +11,7 @@ class ParserJSON : public Parser
 public:
     ParserJSON() = default; 
 
-    auto toChunks(const QVariant& dataVariant) -> QStringList override;
+    auto toChunks(const QVariant& dataVariant) -> QVector<Chunk> override;
 
 private:
     auto extractTextRecursive(
