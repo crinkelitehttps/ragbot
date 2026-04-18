@@ -26,10 +26,6 @@ Embedder::Embedder(const QJsonObject& config)
         m_files << filesVal.toString();
     }
 
-    if (config.isEmpty()) {
-        qWarning() << "Embedder: empty config";
-        return;
-    }
     if (!m_db.isOpen()) {
         qWarning() << "Embedder: database did not open";
         return;
@@ -61,7 +57,7 @@ void Embedder::processAllFiles()
     }
 
     const int total = paths.size();
-    qDebug() << "Embedder::processAllFiles():" << total << "JSON files across" << m_files.size() << "director(ies)";
+    qDebug() << "Embedder::processAllFiles():" << total << "JSON files across" << m_files.size() << "directories";
 
     if (!m_db.beginBatch()) {
         qWarning() << "Embedder::processAllFiles(): failed to begin batch transaction";

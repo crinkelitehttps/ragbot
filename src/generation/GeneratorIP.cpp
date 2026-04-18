@@ -10,6 +10,22 @@
 
 
 //--------------------------------------------------------------------------------
+auto GeneratorIP::runLoop(QNetworkReply* reply) -> bool
+{
+    QEventLoop loop;
+    QTimer timer;
+    timer.setSingleShot(true);
+    QObject::connect(reply,  &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    QObject::connect(&timer, &QTimer::timeout,         &loop, &QEventLoop::quit);
+    timer.start(m_timeout);
+    loop.exec();
+    if (timer.isActive()) { timer.stop(); return true; }
+    reply->abort();
+    return false;
+}
+
+
+//--------------------------------------------------------------------------------
 GeneratorIP::GeneratorIP(const QJsonObject& config)
     : m_basePath(config.value("basePath").toString(
           config.value("remotePath").toString()))
@@ -28,8 +44,12 @@ auto GeneratorIP::parseEmbeddingResponse(const QByteArray& data) -> QVector<floa
     const QJsonDocument doc = QJsonDocument::fromJson(data);
     if (doc.isNull()) return {};
 
-    const QJsonArray embArray =
-        doc.object()["data"].toArray().at(0).toObject()["embedding"].toArray();
+    const QJsonArray dataArr = doc.object()["data"].toArray();
+    if (dataArr.isEmpty()) {
+        qWarning() << "GeneratorIP::parseEmbeddingResponse(): empty data array";
+        return {};
+    }
+    const QJsonArray embArray = dataArr.at(0).toObject()["embedding"].toArray();
 
     QVector<float> result;
     result.reserve(embArray.size());
@@ -50,23 +70,13 @@ auto GeneratorIP::generate(const QString& data) -> QVector<float>
     const QJsonObject body{{"input", data}, {"model", m_modelName}};
     QNetworkReply* reply = m_network.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
 
-    QEventLoop loop;
-    QTimer timer;
-    timer.setSingleShot(true);
-    QObject::connect(reply,  &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timer, &QTimer::timeout,         &loop, &QEventLoop::quit);
-    timer.start(m_timeout);
-    loop.exec();
-
     QVector<float> result;
-    if (timer.isActive()) {
-        timer.stop();
+    if (runLoop(reply)) {
         if (reply->error() == QNetworkReply::NoError)
             result = parseEmbeddingResponse(reply->readAll());
         else
             qWarning() << "GeneratorIP::generate() network error:" << reply->errorString();
     } else {
-        reply->abort();
         qWarning() << "GeneratorIP::generate() timed out after" << m_timeout << "ms";
     }
     reply->deleteLater();
@@ -80,8 +90,12 @@ auto GeneratorIP::parseStaticResponse(const QByteArray& data) -> QString
     const QJsonDocument doc = QJsonDocument::fromJson(data);
     if (doc.isNull()) return {};
 
-    return doc.object()["choices"].toArray()
-              .at(0).toObject()["message"].toObject()["content"].toString();
+    const QJsonArray choices = doc.object()["choices"].toArray();
+    if (choices.isEmpty()) {
+        qWarning() << "GeneratorIP::parseStaticResponse(): empty choices array";
+        return {};
+    }
+    return choices.at(0).toObject()["message"].toObject()["content"].toString();
 }
 
 
@@ -97,8 +111,9 @@ auto GeneratorIP::parseStreamChunk(const QByteArray& data) -> QString
         const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
         if (doc.isNull()) continue;
 
-        const QJsonObject delta =
-            doc.object()["choices"].toArray().at(0).toObject()["delta"].toObject();
+        const QJsonArray choices = doc.object()["choices"].toArray();
+        if (choices.isEmpty()) continue;
+        const QJsonObject delta = choices.at(0).toObject()["delta"].toObject();
         if (delta.contains("content")) result += delta["content"].toString();
     }
     return result;
@@ -124,7 +139,7 @@ auto GeneratorIP::generateText(
         {"stream",      isStream},
         {"messages",    messages},
         {"temperature", DefaultTemp},
-        {"max_tokens",  static_cast<int>(DefaultMaxTokens)}
+        {"max_tokens",  DefaultMaxTokens}
     };
 
     QNetworkRequest req(QUrl(m_basePath + "v1/chat/completions"));
@@ -132,12 +147,6 @@ auto GeneratorIP::generateText(
     req.setTransferTimeout(m_timeout);
 
     QNetworkReply* reply = m_network.post(req, QJsonDocument(body).toJson());
-
-    QEventLoop loop;
-    QTimer timer;
-    timer.setSingleShot(true);
-    QObject::connect(reply,  &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timer, &QTimer::timeout,         &loop, &QEventLoop::quit);
 
     QString streamed;
     if (isStream) {
@@ -148,18 +157,13 @@ auto GeneratorIP::generateText(
         });
     }
 
-    timer.start(m_timeout);
-    loop.exec();
-
     QString result;
-    if (timer.isActive()) {
-        timer.stop();
+    if (runLoop(reply)) {
         if (reply->error() == QNetworkReply::NoError)
             result = isStream ? streamed : parseStaticResponse(reply->readAll());
         else
             qWarning() << "GeneratorIP::generateText() network error:" << reply->errorString();
     } else {
-        reply->abort();
         qWarning() << "GeneratorIP::generateText() timed out after" << m_timeout << "ms";
     }
     reply->deleteLater();

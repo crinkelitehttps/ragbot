@@ -15,8 +15,8 @@ public:
     [[nodiscard]] virtual auto isValid() const -> bool = 0;
 
 protected:
-    static constexpr float DefaultTemp     { 0.7f };
-    static constexpr float DefaultMaxTokens { 2000.0f };
+    static constexpr float DefaultTemp      { 0.7f };
+    static constexpr int   DefaultMaxTokens { 2000 };
 };
 
 #endif // TEXTGENERATOR_H

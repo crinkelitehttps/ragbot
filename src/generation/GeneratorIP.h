@@ -27,6 +27,7 @@ public:
 
 private:
     [[nodiscard]] static auto parseEmbeddingResponse(const QByteArray& data) -> QVector<float>;
+    auto runLoop(QNetworkReply* reply) -> bool;
 
     static constexpr int DefaultTimeout { 240000 };
     static inline const QString SseDataPrefix = "data: ";
