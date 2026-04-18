@@ -17,6 +17,7 @@ SOURCES += \
     src/generation/GeneratorFactory.cpp \
     src/generation/GeneratorIP.cpp \
     src/parsers/CDDAResolver.cpp \
+    src/parsers/ManPageResolver.cpp \
     src/parsers/ParserJSON.cpp
 
 HEADERS += \
@@ -33,6 +34,7 @@ HEADERS += \
     src/generation/GeneratorIP.h \
     src/generation/TextGenerator.h \
     src/parsers/CDDAResolver.h \
+    src/parsers/ManPageResolver.h \
     src/parsers/Parser.h \
     src/parsers/ParserJSON.h
 

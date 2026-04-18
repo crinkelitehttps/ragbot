@@ -28,6 +28,7 @@ private:
 
     // Returns true if the file was newly indexed, false if already up-to-date.
     auto fileEmbed(QFile& file) -> bool;
+    auto fileEmbedManPage(const QString& path) -> bool;
 
     EmbeddingDatabase                   m_db;
     QStringList                         m_files;
@@ -35,6 +36,7 @@ private:
     std::unique_ptr<Parser>             m_parser;
     CDDAResolver::Registry              m_registry;
     QVector<float>                      m_lastQueryEmbedding;
+    QString                             m_parserType;
     int                                 m_topK { 10 };
     float                               m_similarityThreshold { 0.0f };
     bool                                m_isValid { false };

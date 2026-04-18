@@ -8,13 +8,14 @@
 #include "Embedder.h"
 #include "../generation/GeneratorFactory.h"
 #include "../parsers/ParserJSON.h"
+#include "../parsers/ManPageResolver.h"
 
 
 //--------------------------------------------------------------------------------
 Embedder::Embedder(const QJsonObject& config)
     : m_db(config)
     , m_generator(GeneratorFactory::createEmbedding(config.value("generator").toObject()))
-    , m_parser(std::make_unique<ParserJSON>())
+    , m_parserType(config.value("parserType").toString("cdda_json"))
     , m_topK(config.value("topK").toInt(10))
     , m_similarityThreshold(static_cast<float>(config.value("similarityThreshold").toDouble(0.0)))
 {
@@ -40,7 +41,10 @@ Embedder::Embedder(const QJsonObject& config)
     if (config.value("skipIndex").toBool(false)) {
         qDebug() << "Embedder: skipping index pass (-s flag)";
     } else {
-        m_registry = CDDAResolver::buildRegistry(m_files);
+        if (m_parserType == "cdda_json") {
+            m_parser = std::make_unique<ParserJSON>();
+            m_registry = CDDAResolver::buildRegistry(m_files);
+        }
         processAllFiles();
     }
 }
@@ -50,14 +54,22 @@ Embedder::Embedder(const QJsonObject& config)
 void Embedder::processAllFiles()
 {
     QStringList paths;
-    for (const QString& dir : m_files) {
-        QDirIterator it(dir, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
-        while (it.hasNext())
-            paths << it.next();
+
+    if (m_parserType == "man_page") {
+        paths = ManPageResolver::discover(m_files);
+        qDebug() << "Embedder::processAllFiles():" << paths.size()
+                 << "man page files across" << m_files.size() << "directories";
+    } else {
+        for (const QString& dir : m_files) {
+            QDirIterator it(dir, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
+            while (it.hasNext())
+                paths << it.next();
+        }
+        qDebug() << "Embedder::processAllFiles():" << paths.size()
+                 << "JSON files across" << m_files.size() << "directories";
     }
 
     const int total = paths.size();
-    qDebug() << "Embedder::processAllFiles():" << total << "JSON files across" << m_files.size() << "directories";
 
     if (!m_db.beginBatch()) {
         qWarning() << "Embedder::processAllFiles(): failed to begin batch transaction";
@@ -66,10 +78,14 @@ void Embedder::processAllFiles()
 
     int indexed = 0, skipped = 0, n = 0;
     for (const QString& path : paths) {
-        QFile file(path);
         qDebug() << QString("[%1/%2] %3").arg(++n).arg(total)
                                          .arg(QFileInfo(path).fileName());
-        if (fileEmbed(file)) ++indexed; else ++skipped;
+        if (m_parserType == "man_page") {
+            if (fileEmbedManPage(path)) ++indexed; else ++skipped;
+        } else {
+            QFile file(path);
+            if (fileEmbed(file)) ++indexed; else ++skipped;
+        }
     }
 
     if (!m_db.commitBatch()) {
@@ -138,6 +154,58 @@ auto Embedder::fileEmbed(QFile& file) -> bool
 
     qDebug() << "Embedder::fileEmbed(): indexed" << added
              << "chunks from" << QFileInfo(file.fileName()).fileName();
+    return true;
+}
+
+
+//--------------------------------------------------------------------------------
+auto Embedder::fileEmbedManPage(const QString& path) -> bool
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "Embedder::fileEmbedManPage(): cannot open" << path;
+        return false;
+    }
+    const QByteArray fileData = file.readAll();
+    file.close();
+
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(fileData);
+
+    m_db.beginFileTransaction();
+
+    const int sourceId = m_db.newSourceFileId(hash.result().toHex(), path);
+    if (sourceId < 0) {
+        m_db.rollbackFileTransaction();
+        return false; // unchanged since last index
+    }
+
+    const QVector<Parser::Chunk> chunks = ManPageResolver::fileToChunks(path);
+    if (chunks.isEmpty()) {
+        qWarning() << "Embedder::fileEmbedManPage(): no chunks produced for" << path;
+        m_db.rollbackFileTransaction();
+        return false;
+    }
+
+    int added = 0;
+    for (const Parser::Chunk& chunk : chunks) {
+        const QVector<float> embedding = m_generator->generate("search_document: " + chunk.embedText);
+        if (embedding.isEmpty()) {
+            qWarning() << "Embedder::fileEmbedManPage(): empty embedding — aborting file";
+            m_db.rollbackFileTransaction();
+            return false;
+        }
+        if (m_db.embeddingSave(sourceId, embedding, chunk.content)) ++added;
+    }
+
+    if (!m_db.commitFileTransaction()) {
+        qWarning() << "Embedder::fileEmbedManPage(): commit failed —" << QFileInfo(path).fileName();
+        m_db.rollbackFileTransaction();
+        return false;
+    }
+
+    qDebug() << "Embedder::fileEmbedManPage(): indexed" << added
+             << "chunks from" << QFileInfo(path).fileName();
     return true;
 }
 
