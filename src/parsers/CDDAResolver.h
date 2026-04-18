@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QString>
+#include <QStringList>
 
 // Resolves Cataclysm: Dark Days Ahead copy-from inheritance.
 // Objects in CDDA JSON use "copy-from" to inherit fields from a named base object.
@@ -17,6 +18,7 @@ public:
     // Scan all *.json files under dataDir and return a registry of all objects
     // keyed by their "id" or "abstract" field.
     static auto buildRegistry(const QString& dataDir) -> Registry;
+    static auto buildRegistry(const QStringList& dataDirs) -> Registry;
 
     // Return obj with all copy-from fields merged in from the registry.
     // Child fields take precedence over parent fields.

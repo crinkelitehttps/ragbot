@@ -4,6 +4,7 @@
 #include <memory>
 #include <QFile>
 #include <QHash>
+#include <QStringList>
 #include <QJsonObject>
 #include "../generation/EmbeddingGenerator.h"
 #include "../db/EmbeddingDatabase.h"
@@ -29,7 +30,7 @@ private:
     auto fileEmbed(QFile& file) -> bool;
 
     EmbeddingDatabase                   m_db;
-    QString                             m_files;
+    QStringList                         m_files;
     std::unique_ptr<EmbeddingGenerator> m_generator;
     std::unique_ptr<Parser>             m_parser;
     CDDAResolver::Registry              m_registry;

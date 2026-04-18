@@ -41,6 +41,19 @@ auto CDDAResolver::buildRegistry(const QString& dataDir) -> Registry
 
 
 //--------------------------------------------------------------------------------
+auto CDDAResolver::buildRegistry(const QStringList& dataDirs) -> Registry
+{
+    Registry registry;
+    for (const QString& dir : dataDirs) {
+        const Registry partial = buildRegistry(dir);
+        for (auto it = partial.cbegin(); it != partial.cend(); ++it)
+            registry.insert(it.key(), it.value());
+    }
+    return registry;
+}
+
+
+//--------------------------------------------------------------------------------
 auto CDDAResolver::resolve(const QJsonObject& obj, const Registry& registry, int depth)
     -> QJsonObject
 {

@@ -13,12 +13,19 @@
 //--------------------------------------------------------------------------------
 Embedder::Embedder(const QJsonObject& config)
     : m_db(config)
-    , m_files(config.value("files").toString())
     , m_generator(GeneratorFactory::createEmbedding(config.value("generator").toObject()))
     , m_parser(std::make_unique<ParserJSON>())
     , m_topK(config.value("topK").toInt(10))
     , m_similarityThreshold(static_cast<float>(config.value("similarityThreshold").toDouble(0.0)))
 {
+    const QJsonValue filesVal = config.value("files");
+    if (filesVal.isArray()) {
+        for (const QJsonValue& v : filesVal.toArray())
+            m_files << v.toString();
+    } else {
+        m_files << filesVal.toString();
+    }
+
     if (config.isEmpty()) {
         qWarning() << "Embedder: empty config";
         return;
@@ -47,12 +54,14 @@ Embedder::Embedder(const QJsonObject& config)
 void Embedder::processAllFiles()
 {
     QStringList paths;
-    QDirIterator it(m_files, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext())
-        paths << it.next();
+    for (const QString& dir : m_files) {
+        QDirIterator it(dir, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
+        while (it.hasNext())
+            paths << it.next();
+    }
 
     const int total = paths.size();
-    qDebug() << "Embedder::processAllFiles():" << total << "JSON files in" << m_files;
+    qDebug() << "Embedder::processAllFiles():" << total << "JSON files across" << m_files.size() << "director(ies)";
 
     if (!m_db.beginBatch()) {
         qWarning() << "Embedder::processAllFiles(): failed to begin batch transaction";
