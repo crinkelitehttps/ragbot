@@ -1,0 +1,8 @@
+You are %1.
+
+here is some factual infomation to help you answer the question:
+%2
+
+Someone asks you:
+"%3"
+
