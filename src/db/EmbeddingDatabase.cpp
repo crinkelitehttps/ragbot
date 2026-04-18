@@ -242,10 +242,24 @@ auto EmbeddingDatabase::embeddingSave(
 
 
 //--------------------------------------------------------------------------------
+auto EmbeddingDatabase::beginBatch() -> bool
+{
+    return exec("BEGIN;");
+}
+
+
+//--------------------------------------------------------------------------------
+auto EmbeddingDatabase::commitBatch() -> bool
+{
+    return exec("COMMIT;");
+}
+
+
+//--------------------------------------------------------------------------------
 auto EmbeddingDatabase::beginFileTransaction() -> bool
 {
     m_txIndexSnapshot = m_index.ntotal();
-    return exec("BEGIN;");
+    return exec("SAVEPOINT file_tx;");
 }
 
 
@@ -253,14 +267,15 @@ auto EmbeddingDatabase::beginFileTransaction() -> bool
 auto EmbeddingDatabase::commitFileTransaction() -> bool
 {
     m_txIndexSnapshot = -1;
-    return exec("COMMIT;");
+    return exec("RELEASE SAVEPOINT file_tx;");
 }
 
 
 //--------------------------------------------------------------------------------
 auto EmbeddingDatabase::rollbackFileTransaction() -> void
 {
-    exec("ROLLBACK;");
+    exec("ROLLBACK TO SAVEPOINT file_tx;");
+    exec("RELEASE SAVEPOINT file_tx;");
     if (m_txIndexSnapshot >= 0)
         m_index.rollbackTo(m_txIndexSnapshot);
     m_txIndexSnapshot = -1;

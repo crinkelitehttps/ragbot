@@ -54,12 +54,22 @@ void Embedder::processAllFiles()
     const int total = paths.size();
     qDebug() << "Embedder::processAllFiles():" << total << "JSON files in" << m_files;
 
+    if (!m_db.beginBatch()) {
+        qWarning() << "Embedder::processAllFiles(): failed to begin batch transaction";
+        return;
+    }
+
     int indexed = 0, skipped = 0, n = 0;
     for (const QString& path : paths) {
         QFile file(path);
         qDebug() << QString("[%1/%2] %3").arg(++n).arg(total)
                                          .arg(QFileInfo(path).fileName());
         if (fileEmbed(file)) ++indexed; else ++skipped;
+    }
+
+    if (!m_db.commitBatch()) {
+        qWarning() << "Embedder::processAllFiles(): batch commit failed — re-index required";
+        return;
     }
 
     qDebug() << "Embedder::processAllFiles(): done —"

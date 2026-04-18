@@ -44,8 +44,13 @@ public:
         float minSimilarity = 0.0f
     ) -> QVector<SearchResult>;
 
-    // Transaction helpers for atomic per-file indexing.  If commit is never
-    // called (e.g. on error), rollback reverts both the SQLite writes and any
+    // Outer batch transaction wrapping the entire indexing pass.
+    // A single BEGIN/COMMIT amortizes fsync cost across all files.
+    auto beginBatch()    -> bool;
+    auto commitBatch()   -> bool;
+
+    // Per-file savepoints nested inside the batch transaction.
+    // rollbackFileTransaction() reverts both the SQLite savepoint and any
     // in-memory VectorIndex entries added since beginFileTransaction().
     auto beginFileTransaction()    -> bool;
     auto commitFileTransaction()   -> bool;
