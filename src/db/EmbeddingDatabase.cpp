@@ -270,7 +270,8 @@ auto EmbeddingDatabase::rollbackFileTransaction() -> void
 //--------------------------------------------------------------------------------
 auto EmbeddingDatabase::textResults(
     const QVector<float>& queryEmbedding,
-    int topK
+    int   topK,
+    float minSimilarity
 ) -> QVector<SearchResult>
 {
     if (!m_db || queryEmbedding.size() != Dimensions) return {};
@@ -281,8 +282,16 @@ auto EmbeddingDatabase::textResults(
     const QVector<VectorIndex::Hit> hits = m_index.search(normalizedQuery, topK);
     if (hits.isEmpty()) return {};
 
+    // Filter out hits below the similarity threshold before fetching content.
+    QVector<VectorIndex::Hit> filteredHits;
+    filteredHits.reserve(hits.size());
+    for (const auto& hit : hits)
+        if (hit.similarity >= minSimilarity)
+            filteredHits.append(hit);
+    if (filteredHits.isEmpty()) return {};
+
     QVector<SearchResult> results;
-    results.reserve(hits.size());
+    results.reserve(filteredHits.size());
 
     sqlite3_stmt* stmt = nullptr;
     sqlite3_prepare_v2(m_db,
@@ -292,7 +301,7 @@ auto EmbeddingDatabase::textResults(
         "WHERE  c.faiss_id = ?",
         -1, &stmt, nullptr);
 
-    for (const auto& hit : hits) {
+    for (const auto& hit : filteredHits) {
         sqlite3_reset(stmt);
         sqlite3_bind_int64(stmt, 1, hit.id);
 

@@ -16,6 +16,8 @@ Embedder::Embedder(const QJsonObject& config)
     , m_files(config.value("files").toString())
     , m_generator(GeneratorFactory::createEmbedding(config.value("generator").toObject()))
     , m_parser(std::make_unique<ParserJSON>())
+    , m_topK(config.value("topK").toInt(10))
+    , m_similarityThreshold(static_cast<float>(config.value("similarityThreshold").toDouble(0.0)))
 {
     if (config.isEmpty()) {
         qWarning() << "Embedder: empty config";
@@ -126,7 +128,7 @@ auto Embedder::fileEmbed(QFile& file) -> bool
 
 
 //--------------------------------------------------------------------------------
-auto Embedder::search(const QString& query, int topK)
+auto Embedder::search(const QString& query)
     -> QVector<EmbeddingDatabase::SearchResult>
 {
     if (!m_generator || !m_generator->isValid()) {
@@ -140,5 +142,5 @@ auto Embedder::search(const QString& query, int topK)
         return {};
     }
 
-    return m_db.textResults(m_lastQueryEmbedding, topK);
+    return m_db.textResults(m_lastQueryEmbedding, m_topK, m_similarityThreshold);
 }

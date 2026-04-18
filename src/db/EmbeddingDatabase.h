@@ -35,11 +35,13 @@ public:
         const QString& chunkContent
     ) -> bool;
 
-    // Returns the top-K most similar stored chunks for the given embedding.
+    // Returns the top-K most similar stored chunks for the given embedding,
+    // filtered to those with similarity >= minSimilarity.
     // The query vector is normalized internally before searching.
     auto textResults(
         const QVector<float>& queryEmbedding,
-        int topK = DefaultTopK
+        int   topK          = DefaultTopK,
+        float minSimilarity = 0.0f
     ) -> QVector<SearchResult>;
 
     // Transaction helpers for atomic per-file indexing.  If commit is never

@@ -2,6 +2,8 @@
   "embedder": {
     "name": "embeddings.db",
     "files": "/home/joe/source/Cataclysm-DDA/data/json/monsters",
+    "topK": 10,
+    "similarityThreshold": 0.0,
     "generator": {
       "backend": "embedded",
       "modelPath": "/home/joe/Downloads/nomic-embed-text-v1.5.f32.gguf"

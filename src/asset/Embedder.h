@@ -15,8 +15,8 @@ class Embedder
 public:
     explicit Embedder(const QJsonObject& config);
 
-    // Embeds query and returns the top-K most similar stored chunks.
-    auto search(const QString& query, int topK = 10) -> QVector<EmbeddingDatabase::SearchResult>;
+    // Embeds query and returns the top-K most similar stored chunks above the similarity threshold.
+    auto search(const QString& query) -> QVector<EmbeddingDatabase::SearchResult>;
 
     [[nodiscard]] auto lastQueryEmbedding() const -> const QVector<float>& { return m_lastQueryEmbedding; }
 
@@ -34,6 +34,8 @@ private:
     std::unique_ptr<Parser>             m_parser;
     CDDAResolver::Registry              m_registry;
     QVector<float>                      m_lastQueryEmbedding;
+    int                                 m_topK { 10 };
+    float                               m_similarityThreshold { 0.0f };
     bool                                m_isValid { false };
 };
 
