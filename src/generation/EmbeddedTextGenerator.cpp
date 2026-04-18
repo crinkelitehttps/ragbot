@@ -110,6 +110,7 @@ auto EmbeddedTextGenerator::generateText(
     const llama_vocab* vocab = llama_model_get_vocab(m_model);
 
     QString response;
+    bool inThinkBlock = false;
     for (int n = 0; n < m_maxTokenGen; ++n) {
         llama_token tok = llama_sampler_sample(sampler, m_ctx, -1);
 
@@ -119,8 +120,14 @@ auto EmbeddedTextGenerator::generateText(
         const int len = llama_token_to_piece(vocab, tok, buf.data(), buf.size(), 0, true);
         if (len > 0) {
             const QString piece = QString::fromUtf8(buf.data(), len);
-            response += piece;
-            if (isStream) QTextStream(stdout) << piece << Qt::flush;
+
+            if (piece == "<think>")   inThinkBlock = true;
+            const bool visible = !inThinkBlock || m_enableThinking;
+            if (visible) {
+                response += piece;
+                if (isStream) QTextStream(stdout) << piece << Qt::flush;
+            }
+            if (piece == "</think>")  inThinkBlock = false;
         }
 
         llama_batch next = llama_batch_get_one(&tok, 1);
