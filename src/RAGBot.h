@@ -13,7 +13,7 @@ public:
     static constexpr int MaxHistoryTurns = 2;
 
     RAGBot(Embedder& embedder, Researcher& researcher, Roleplayer& roleplayer,
-           RoleplayDatabase& roleplayDb);
+           RoleplayDatabase& roleplayDb, bool enableRoleplay);
     ~RAGBot() { qDebug() << "~RAGBot()"; }
 
     void start();
@@ -25,6 +25,7 @@ private:
     Researcher&       m_researcher;
     Roleplayer&       m_roleplayer;
     RoleplayDatabase& m_roleplayDb;
+    bool              m_enableRoleplay;
 
     QVector<ConversationTurn> m_history;
 };

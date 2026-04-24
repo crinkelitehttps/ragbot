@@ -4,11 +4,12 @@
 
 //--------------------------------------------------------------------------------
 RAGBot::RAGBot(Embedder& embedder, Researcher& researcher, Roleplayer& roleplayer,
-               RoleplayDatabase& roleplayDb)
+               RoleplayDatabase& roleplayDb, bool enableRoleplay)
     : m_embedder(embedder)
     , m_researcher(researcher)
     , m_roleplayer(roleplayer)
     , m_roleplayDb(roleplayDb)
+    , m_enableRoleplay(enableRoleplay)
 {
     qDebug() << "RAGBot::RAGBot()";
 }
@@ -53,8 +54,11 @@ auto RAGBot::processQuestion(const QString& question) -> void
         return;
     }
 
-    // Stage 3: deliver the answer in-character.
-    const QString roleplayAnswer = m_roleplayer.respond(researchAnswer, question, m_history);
+    QString roleplayAnswer;
+    if (m_enableRoleplay) {
+        // Stage 3: deliver the answer in-character.
+        roleplayAnswer = m_roleplayer.respond(researchAnswer, question, m_history);
+    }
 
     m_roleplayDb.logConversation(m_embedder.lastQueryEmbedding(), question, researchAnswer, roleplayAnswer);
 

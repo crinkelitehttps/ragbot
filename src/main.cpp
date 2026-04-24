@@ -118,7 +118,8 @@ auto main(int argc, char *argv[]) -> int
         RoleplayDatabase roleplayDb(root.value("conversationsDb").toString("conversations.db"));
         qDebug() << "main: roleplay database ready";
 
-        RAGBot ragbot(embedder, researcher, roleplayer, roleplayDb);
+        const bool enableRoleplay = root.value("enableRoleplay").toBool(false);
+        RAGBot ragbot(embedder, researcher, roleplayer, roleplayDb, enableRoleplay);
         ragbot.start();
     });
 
