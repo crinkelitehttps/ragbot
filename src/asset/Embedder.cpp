@@ -41,10 +41,8 @@ Embedder::Embedder(const QJsonObject& config)
     if (config.value("skipIndex").toBool(false)) {
         qDebug() << "Embedder: skipping index pass (-s flag)";
     } else {
-        if (m_parserType == "cdda_json") {
+        if (m_parserType == "cdda_json")
             m_parser = std::make_unique<ParserJSON>();
-            m_registry = CDDAResolver::buildRegistry(m_files);
-        }
         processAllFiles();
     }
 }
@@ -67,6 +65,7 @@ void Embedder::processAllFiles()
         }
         qDebug() << "Embedder::processAllFiles():" << paths.size()
                  << "JSON files across" << m_files.size() << "directories";
+        m_registry = CDDAResolver::buildRegistryFromFiles(paths);
     }
 
     const int total = paths.size();

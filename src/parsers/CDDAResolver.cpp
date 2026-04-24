@@ -54,6 +54,37 @@ auto CDDAResolver::buildRegistry(const QStringList& dataDirs) -> Registry
 
 
 //--------------------------------------------------------------------------------
+auto CDDAResolver::buildRegistryFromFiles(const QStringList& filePaths) -> Registry
+{
+    Registry registry;
+
+    auto registerObject = [&](const QJsonObject& obj) {
+        const QString id = obj.value("id").toString(
+                               obj.value("abstract").toString());
+        if (!id.isEmpty()) registry.insert(id, obj);
+    };
+
+    for (const QString& path : filePaths) {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) continue;
+
+        const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        file.close();
+
+        if (doc.isArray()) {
+            for (const QJsonValue& v : doc.array())
+                if (v.isObject()) registerObject(v.toObject());
+        } else if (doc.isObject()) {
+            registerObject(doc.object());
+        }
+    }
+
+    qDebug() << "CDDAResolver::buildRegistryFromFiles(): registered" << registry.size() << "objects";
+    return registry;
+}
+
+
+//--------------------------------------------------------------------------------
 auto CDDAResolver::resolve(const QJsonObject& obj, const Registry& registry, int depth)
     -> QJsonObject
 {
@@ -97,23 +128,23 @@ auto CDDAResolver::mergeObjects(const QJsonObject& base, const QJsonObject& over
         }
     }
 
-    // "relative": { "field": delta } — add delta to the parent's value
+    // "relative": { "field": delta } — add delta to the already-merged value
     if (overlay.contains("relative") && overlay.value("relative").isObject()) {
         const QJsonObject rel = overlay.value("relative").toObject();
         for (auto it = rel.begin(); it != rel.end(); ++it) {
-            const QJsonValue baseVal = base.value(it.key());
-            if (baseVal.isDouble() && it.value().isDouble())
-                result[it.key()] = baseVal.toDouble() + it.value().toDouble();
+            const QJsonValue cur = result.value(it.key());
+            if (cur.isDouble() && it.value().isDouble())
+                result[it.key()] = cur.toDouble() + it.value().toDouble();
         }
     }
 
-    // "proportional": { "field": factor } — multiply the parent's value by factor
+    // "proportional": { "field": factor } — multiply the already-merged value by factor
     if (overlay.contains("proportional") && overlay.value("proportional").isObject()) {
         const QJsonObject prop = overlay.value("proportional").toObject();
         for (auto it = prop.begin(); it != prop.end(); ++it) {
-            const QJsonValue baseVal = base.value(it.key());
-            if (baseVal.isDouble() && it.value().isDouble())
-                result[it.key()] = qRound(baseVal.toDouble() * it.value().toDouble());
+            const QJsonValue cur = result.value(it.key());
+            if (cur.isDouble() && it.value().isDouble())
+                result[it.key()] = qRound(cur.toDouble() * it.value().toDouble());
         }
     }
 

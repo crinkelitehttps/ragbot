@@ -20,6 +20,9 @@ public:
     static auto buildRegistry(const QString& dataDir) -> Registry;
     static auto buildRegistry(const QStringList& dataDirs) -> Registry;
 
+    // Build a registry from an already-collected list of file paths (no directory scan).
+    static auto buildRegistryFromFiles(const QStringList& filePaths) -> Registry;
+
     // Return obj with all copy-from fields merged in from the registry.
     // Child fields take precedence over parent fields.
     // Returns the object unchanged (minus copy-from) if the parent is not found.
