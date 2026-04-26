@@ -1,5 +1,13 @@
 {
   "enableRoleplay": true,
+  "reranker": {
+    "enabled": false,
+    "topN": 5,
+    "generator": {
+      "backend": "embedded",
+      "modelPath": "/path/to/reranker.gguf"
+    }
+  },
   "embedder": {
     "name": "embeddings.db",
     "files": "/home/joe/source/Cataclysm-DDA/data/json/monsters",

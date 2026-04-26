@@ -8,6 +8,7 @@
 #include <QJsonObject>
 
 #include "asset/Embedder.h"
+#include "asset/Reranker.h"
 #include "db/RoleplayDatabase.h"
 #include "RAGBot.h"
 
@@ -109,6 +110,9 @@ auto main(int argc, char *argv[]) -> int
             return;
         }
 
+        Reranker reranker(root.value("reranker").toObject());
+        qDebug() << "main: reranker ready (enabled:" << reranker.isEnabled() << ")";
+
         Researcher researcher(root.value("researcher").toObject());
         qDebug() << "main: researcher ready";
 
@@ -119,7 +123,7 @@ auto main(int argc, char *argv[]) -> int
         qDebug() << "main: roleplay database ready";
 
         const bool enableRoleplay = root.value("enableRoleplay").toBool(false);
-        RAGBot ragbot(embedder, researcher, roleplayer, roleplayDb, enableRoleplay);
+        RAGBot ragbot(embedder, reranker, researcher, roleplayer, roleplayDb, enableRoleplay);
         ragbot.start();
     });
 

@@ -9,6 +9,7 @@ SOURCES += \
     src/main.cpp \
     src/RAGBot.cpp \
     src/asset/Embedder.cpp \
+    src/asset/Reranker.cpp \
     src/asset/Researcher.cpp \
     src/asset/Roleplayer.cpp \
     src/db/EmbeddingDatabase.cpp \
@@ -16,6 +17,7 @@ SOURCES += \
     src/db/VectorIndex.cpp \
     src/generation/GeneratorFactory.cpp \
     src/generation/GeneratorIP.cpp \
+    src/generation/RerankGeneratorIP.cpp \
     src/parsers/CDDAResolver.cpp \
     src/parsers/ManPageResolver.cpp \
     src/parsers/ParserJSON.cpp \
@@ -25,6 +27,7 @@ HEADERS += \
     src/ConversationTurn.h \
     src/RAGBot.h \
     src/asset/Embedder.h \
+    src/asset/Reranker.h \
     src/asset/Researcher.h \
     src/asset/Roleplayer.h \
     src/db/EmbeddingDatabase.h \
@@ -33,6 +36,8 @@ HEADERS += \
     src/generation/EmbeddingGenerator.h \
     src/generation/GeneratorFactory.h \
     src/generation/GeneratorIP.h \
+    src/generation/RerankGenerator.h \
+    src/generation/RerankGeneratorIP.h \
     src/generation/TextGenerator.h \
     src/parsers/CDDAResolver.h \
     src/parsers/ManPageResolver.h \
@@ -49,10 +54,12 @@ embedded_inference {
 
     SOURCES += \
         src/generation/EmbeddedEmbeddingGenerator.cpp \
+        src/generation/EmbeddedRerankGenerator.cpp \
         src/generation/EmbeddedTextGenerator.cpp
 
     HEADERS += \
         src/generation/EmbeddedEmbeddingGenerator.h \
+        src/generation/EmbeddedRerankGenerator.h \
         src/generation/EmbeddedTextGenerator.h
 
     INCLUDEPATH += /home/joe/source/llama.cpp/include

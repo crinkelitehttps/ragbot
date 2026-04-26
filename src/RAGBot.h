@@ -3,6 +3,7 @@
 
 #include "ConversationTurn.h"
 #include "asset/Embedder.h"
+#include "asset/Reranker.h"
 #include "asset/Researcher.h"
 #include "asset/Roleplayer.h"
 #include "db/RoleplayDatabase.h"
@@ -12,8 +13,8 @@ class RAGBot
 public:
     static constexpr int MaxHistoryTurns = 2;
 
-    RAGBot(Embedder& embedder, Researcher& researcher, Roleplayer& roleplayer,
-           RoleplayDatabase& roleplayDb, bool enableRoleplay);
+    RAGBot(Embedder& embedder, Reranker& reranker, Researcher& researcher,
+           Roleplayer& roleplayer, RoleplayDatabase& roleplayDb, bool enableRoleplay);
     ~RAGBot() { qDebug() << "~RAGBot()"; }
 
     void start();
@@ -22,6 +23,7 @@ private:
     auto processQuestion(const QString& question) -> void;
 
     Embedder&         m_embedder;
+    Reranker&         m_reranker;
     Researcher&       m_researcher;
     Roleplayer&       m_roleplayer;
     RoleplayDatabase& m_roleplayDb;

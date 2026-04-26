@@ -6,9 +6,10 @@
 #include "RAGBot.h"
 
 //--------------------------------------------------------------------------------
-RAGBot::RAGBot(Embedder& embedder, Researcher& researcher, Roleplayer& roleplayer,
-               RoleplayDatabase& roleplayDb, bool enableRoleplay)
+RAGBot::RAGBot(Embedder& embedder, Reranker& reranker, Researcher& researcher,
+               Roleplayer& roleplayer, RoleplayDatabase& roleplayDb, bool enableRoleplay)
     : m_embedder(embedder)
+    , m_reranker(reranker)
     , m_researcher(researcher)
     , m_roleplayer(roleplayer)
     , m_roleplayDb(roleplayDb)
@@ -49,6 +50,10 @@ auto RAGBot::processQuestion(const QString& question) -> void
         return;
     }
     qDebug() << "RAGBot::processQuestion():" << results.size() << "chunks retrieved";
+
+    // Stage 1b: rerank retrieved chunks by cross-encoder relevance score.
+    if (m_reranker.isEnabled())
+        results = m_reranker.rerank(question, results);
 
     QString researchAnswer;
     QString roleplayAnswer;

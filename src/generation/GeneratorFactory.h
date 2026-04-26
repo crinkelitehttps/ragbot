@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include "EmbeddingGenerator.h"
 #include "TextGenerator.h"
+#include "RerankGenerator.h"
 
 // Creates generator instances from a config object.
 // Config must contain "backend": "embedded" or "backend": "network".
@@ -17,6 +18,9 @@ public:
 
     static auto createText(const QJsonObject& config)
         -> std::unique_ptr<TextGenerator>;
+
+    static auto createRerank(const QJsonObject& config)
+        -> std::unique_ptr<RerankGenerator>;
 
 private:
     GeneratorFactory() = delete;

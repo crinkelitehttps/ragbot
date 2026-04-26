@@ -70,6 +70,12 @@ Required llama.cpp libs: `libcommon.a`, `libllama.a`, `libggml.a`, `libggml-base
 
 ```json
 {
+  "enableRoleplay": true,
+  "reranker": {
+    "enabled": false,
+    "topN": 5,
+    "generator": { "backend": "embedded", "modelPath": "/path/to/reranker.gguf" }
+  },
   "embedder": {
     "name": "embeddings.db",
     "files": "/path/to/CDDA/data/json/monsters",
@@ -96,21 +102,25 @@ Required llama.cpp libs: `libcommon.a`, `libllama.a`, `libggml.a`, `libggml-base
 
 ## Architecture
 
-Three-stage pipeline:
+Four-stage pipeline (researcher and roleplayer run in separate threads; roleplayer waits on a condition variable until researcher finishes):
 
 ```
 User question
     │
     ▼
-Embedder::search()          — embeds query, queries VectorIndex
+Embedder::search()               — embeds query, queries VectorIndex
     │  SearchResult[]
     ▼
-Researcher::research()      — builds context block, calls TextGenerator
-    │  research answer
-    ▼
-Roleplayer::respond()       — formats prompt, calls TextGenerator in-character
-    │
-    ▼
+Reranker::rerank()               — scores chunks, sorts descending, returns top-N
+    │  SearchResult[] (reranked)  (skipped if reranker disabled)
+    ├──────────────────────────────────────────────┐
+    ▼                                              │ (waits for researcher)
+Researcher::research()           — context block → TextGenerator (streamed)
+    │  research answer                             │
+    │                                              ▼
+    │                              Roleplayer::respond() — in-character reply
+    │                                              │
+    ▼◄─────────────────────────────────────────────┘
 Console output
 ```
 
@@ -121,6 +131,16 @@ Console output
 - `EmbeddedEmbeddingGenerator` — implements `EmbeddingGenerator`; in-process llama.cpp, pooling=MEAN
 - `EmbeddedTextGenerator` — implements `TextGenerator`; in-process llama.cpp, ChatML prompt format
 - `GeneratorFactory` — `createEmbedding(config)` / `createText(config)` read `"backend"` key and return `unique_ptr` to the right implementation
+
+**Reranking layer** (`src/generation/`, `src/asset/`):
+- `RerankGenerator` — interface: `score(query, docs) → QVector<float>`
+- `RerankGeneratorIP` — network backend; Cohere `/v1/rerank` format
+- `EmbeddedRerankGenerator` — llama.cpp cross-encoder; uses `LLAMA_POOLING_TYPE_RANK`; picks up model's built-in `rerank` chat template if present, otherwise falls back to EOS/SEP-separated query+document
+- `Reranker` — asset class; scores all retrieved chunks, sorts descending, returns top-N; no-op if disabled or generator invalid
+- `GeneratorFactory::createRerank(config)` — same embedded/network dispatch as other generators
+
+**Utilities** (`src/util/`):
+- `ThreadSafeOutput` — mutex-guarded `write(QString)` / `flush()` for stdout; used by `GeneratorIP` SSE streaming so concurrent threads don't interleave output
 
 **Parsing / indexing layer** (`src/parsers/`, `src/asset/Embedder.cpp`):
 - `CDDAResolver` — `buildRegistry(dir)` scans all JSON files and builds an `id → QJsonObject` map; `resolve(obj, registry)` walks `copy-from` chains and merges parent fields so each stored object contains complete effective stats
