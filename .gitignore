@@ -19,3 +19,5 @@ qt.conf
 
 # Misc
 plan.txt
+embeddings.db
+.embeddings.db
