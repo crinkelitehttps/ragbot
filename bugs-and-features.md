@@ -8,5 +8,5 @@
 ## Feature Ideas
 
 - [x] A. Man page parser — `ManPageResolver` + `parserType: "man_page"` config key in embedder
-- [x] B. `enableRoleplay` config key — Roleplayer off by default; set `"enableRoleplay": true` in root config to enable it
+- [x] B. `enableRoleplay` config key — Roleplayer off by default; set `"enableRoleplay": true` at the **root** of config.json (not nested inside `researcher` or `roleplayer`)
 - [x] C. Streaming output from Researcher directly to console while Roleplayer waits (pipeline parallelism)
