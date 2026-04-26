@@ -1,5 +1,8 @@
 #include <QDebug>
 #include <QTextStream>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 #include "RAGBot.h"
 
 //--------------------------------------------------------------------------------
@@ -47,17 +50,62 @@ auto RAGBot::processQuestion(const QString& question) -> void
     }
     qDebug() << "RAGBot::processQuestion():" << results.size() << "chunks retrieved";
 
-    // Stage 2: synthesise a factual answer from the retrieved context.
-    const QString researchAnswer = m_researcher.research(question, results, m_history);
-    if (researchAnswer.isEmpty()) {
+    QString researchAnswer;
+    QString roleplayAnswer;
+    bool researcherFailed = false;
+    bool roleplayerFailed = false;
+
+    std::condition_variable researcherDone;
+    std::mutex researcherMutex;
+    bool researcherFinished = false;
+
+    // Stage 2: synthesise a factual answer in a background thread.
+    std::thread researcherThread([this, &question, &results, &researchAnswer, &researcherFailed,
+                                   &researcherDone, &researcherMutex, &researcherFinished]() {
+        researchAnswer = m_researcher.research(question, results, m_history);
+        if (researchAnswer.isEmpty()) {
+            researcherFailed = true;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(researcherMutex);
+            researcherFinished = true;
+        }
+        researcherDone.notify_one();
+    });
+
+    // Stage 3: wait for researcher to finish, then run roleplayer in parallel if enabled.
+    std::thread roleplayerThread;
+    if (m_enableRoleplay) {
+        roleplayerThread = std::thread([this, &question, &researchAnswer, &roleplayAnswer, &roleplayerFailed,
+                                         &researcherDone, &researcherMutex, &researcherFinished]() {
+            // Wait for researcher to finish
+            {
+                std::unique_lock<std::mutex> lock(researcherMutex);
+                researcherDone.wait(lock, [&researcherFinished]() { return researcherFinished; });
+            }
+
+            roleplayAnswer = m_roleplayer.respond(researchAnswer, question, m_history);
+            if (roleplayAnswer.isEmpty()) {
+                roleplayerFailed = true;
+            }
+        });
+    }
+
+    // Wait for both threads to complete
+    researcherThread.join();
+    if (m_enableRoleplay) {
+        roleplayerThread.join();
+    }
+
+    // Check for errors
+    if (researcherFailed) {
         qWarning() << "RAGBot::processQuestion(): researcher returned empty answer";
         return;
     }
-
-    QString roleplayAnswer;
-    if (m_enableRoleplay) {
-        // Stage 3: deliver the answer in-character.
-        roleplayAnswer = m_roleplayer.respond(researchAnswer, question, m_history);
+    if (m_enableRoleplay && roleplayerFailed) {
+        qWarning() << "RAGBot::processQuestion(): roleplayer returned empty answer";
+        return;
     }
 
     m_roleplayDb.logConversation(m_embedder.lastQueryEmbedding(), question, researchAnswer, roleplayAnswer);
