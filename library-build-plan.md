@@ -218,5 +218,5 @@ Rough order, each step independently mergeable:
 2. NPC context: sticky-for-session or pushed-per-question?
 3. JSON schema for NPC and world state — needs CDDA-side input on what fields are cheap to emit.
 4. Does the host want a sync `ask_blocking` API at all, or is async-only fine?
-5. Where does the embeddings DB live in a CDDA install, and who runs the indexer — a one-shot CLI tool we ship, or a `ragbot_index()` API the host calls on first run?
+5. Where does the embeddings DB live in a CDDA install, and who runs the indexer — a one-shot CLI tool we ship, or a `ragbot_index()` API the host calls on first run? (Current dev arrangement: `embeddings.db` lives in the build dir `../build-ragbot/` — that's the runtime CWD `run.sh` uses. For distribution we presumably ship a pre-built DB next to the host binary and point the library at it via `assets_dir` / config.)
 6. Licensing compatibility (RAGBot's deps: Qt LGPL, llama.cpp MIT, GGUF model licences) vs CDDA's CC-BY-SA 3.0 + custom — needs confirmation that linkage is allowed in both directions.

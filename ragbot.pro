@@ -85,3 +85,15 @@ INCLUDEPATH += $${QT_ROOT}/include/QtCore
 INCLUDEPATH += $${QT_ROOT}/include/QtNetwork
 
 LIBS += -lpthread -ldl -lm -lstdc++ -lsqlite3
+
+# ---------------------------------------------------------------------------
+# Library build — build with: qmake CONFIG+=library
+# Produces libragbot.a (static archive) instead of the console executable.
+# Combines with embedded_inference: qmake CONFIG+="library embedded_inference"
+# ---------------------------------------------------------------------------
+library {
+    TEMPLATE = lib
+    CONFIG += staticlib
+    CONFIG -= console
+    SOURCES -= src/main.cpp
+}
