@@ -166,6 +166,7 @@ auto GeneratorIP::generateText(
     } else {
         qWarning() << "GeneratorIP::generateText() timed out after" << m_timeout << "ms";
     }
+    QObject::disconnect(reply, &QNetworkReply::readyRead, nullptr, nullptr);
     reply->deleteLater();
     return result;
 }

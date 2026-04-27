@@ -2,25 +2,23 @@
 
 ## Summary
 
-The codebase is small, focused, and mostly internally consistent. Two recent changes — the threaded researcher/roleplayer pipeline and the new `Reranker` stage — exposed a handful of cross-cutting issues that haven't been smoothed out yet. None are critical; the headline ones are: the threading doesn't actually parallelise the work it was meant to parallelise, three of four stdout writers don't use the new `ThreadSafeOutput` mutex, and the `SearchResult::similarity` field is silently re-purposed mid-pipeline.
+**Updated after four follow-up sessions.** All four medium items are resolved. Three low items remain open.
 
-| Severity | Count |
-|----------|-------|
-| Medium   | 4     |
-| Low      | 8     |
-| Critical | 0     |
+The threading was reverted entirely (commit `b96c80e`). The `readyRead` by-reference capture was fixed with an explicit `disconnect()`. Items 3.2 and 5 were found already resolved in the current code.
+
+| Severity | Open | Resolved |
+|----------|------|----------|
+| Medium   | 0    | 4        |
+| Low      | 3    | 5        |
+| Critical | 0    | —        |
 
 ---
 
 ## 1. Conceptual consistency
 
-### 1.1 Threaded pipeline doesn't actually parallelise *(medium)*
+### 1.1 Threaded pipeline doesn't actually parallelise *(medium — resolved)*
 
-`RAGBot::processQuestion` (`src/RAGBot.cpp:67-104`) spawns two `std::thread`s, but the roleplayer's cond-var predicate waits for `researcherFinished`, which is only set *after* `m_researcher.research()` returns (line 70-77). The roleplayer cannot start until the researcher's full answer is produced — functionally equivalent to sequential execution with extra synchronisation overhead.
-
-The original feature intent (item C in `bugs-and-features.md`) was *"Streaming output from Researcher directly to console while Roleplayer waits (pipeline parallelism)"* — but the parallelism part isn't there.
-
-*What to do:* either drop the threading (simpler, same behaviour) or change the wake trigger so the roleplayer can begin prompt construction / template loading while the researcher is still streaming.
+Threading reverted in commit `b96c80e`. `processQuestion` is now fully sequential; `std::thread`, `std::mutex`, `std::condition_variable`, and the `ThreadSafeOutput` helper have been removed.
 
 ### 1.2 Two on/off conventions in the config schema *(low)*
 
@@ -29,53 +27,37 @@ The original feature intent (item C in `bugs-and-features.md`) was *"Streaming o
 
 Two stages, two conventions. Pick one — nested is more scalable.
 
-### 1.3 `SearchResult::similarity` field is re-purposed *(medium)*
+### 1.3 `SearchResult::similarity` field is re-purposed *(medium — resolved)*
 
-`Reranker::rerank` (`src/asset/Reranker.cpp:63`) overwrites `SearchResult::similarity` with the rerank score. Downstream, `Researcher::research` (`src/asset/Researcher.cpp:35,38`) prints it labelled `sim=` and embeds it into the LLM context as `similarity:`. After reranking, that value is a cross-encoder rerank score (typically 0..1, different distribution) — not cosine similarity. The label and the number disagree, and the LLM sees a number under a name that no longer describes it.
-
-*What to do:* add a separate `rerankScore` field, or relabel based on which stage last wrote it.
+Fixed: `EmbeddingDatabase::SearchResult` now has a separate `float rerankScore { -1.0f }` field (negative = not reranked). `Reranker::rerank` sets `rerankScore` instead of overwriting `similarity`. `Researcher::research` uses `relevance:` in the LLM context when reranked, `similarity:` otherwise; the debug line shows both scores.
 
 ---
 
 ## 2. Threading & concurrency
 
-### 2.1 Three of four stdout writers don't use `ThreadSafeOutput` *(medium)*
+### 2.1 Three of four stdout writers don't use `ThreadSafeOutput` *(medium — resolved)*
 
-Only `GeneratorIP::generateText` (`src/generation/GeneratorIP.cpp:157`) was switched to the mutex-guarded helper. The other writers are still raw `QTextStream(stdout)`:
+Resolved with 1.1: threading and `ThreadSafeOutput` were removed entirely in commit `b96c80e`. All stdout writes are back to plain `QTextStream(stdout)`.
 
-- `src/generation/EmbeddedTextGenerator.cpp:128` (token loop)
-- `src/asset/Researcher.cpp:50, 52` (prompt label + trailing newline)
-- `src/asset/Roleplayer.cpp:47, 49` (same)
+### 2.2 `QNetworkReply::readyRead` lambda captures by reference *(low — resolved)*
 
-Currently safe only because the cond-var serialises the two stages (see 1.1). The moment the threading is fixed to actually parallelise — the stated goal — output will race. The mutex was added to one site and forgotten at the others.
+Fixed: `QObject::disconnect(reply, &QNetworkReply::readyRead, nullptr, nullptr)` added before `reply->deleteLater()` in `generateText`. Any queued `readyRead` deliveries after `runLoop()` returns are now suppressed before the stack frame is destroyed.
 
-### 2.2 `QNetworkReply::readyRead` lambda captures by reference *(low)*
+### 2.3 Two threading models in one binary *(low — resolved)*
 
-`src/generation/GeneratorIP.cpp:154-158`. The slot captures `streamed` and `reply` by reference (`[&]`) and the connection is never disconnected. If `readyRead` fires in the small window between `runLoop()` returning and `reply->deleteLater()` taking effect, the lambda would dereference a stack-allocated `QString`. In practice runLoop returns on `finished`, so the window is tight — but it's a fragile pattern.
-
-*What to do:* explicit `disconnect()` before falling out of the function, or capture `streamed` by value into a `std::shared_ptr<QString>` if the slot needs to outlive the call.
-
-### 2.3 Two threading models in one binary *(low)*
-
-`std::thread` + `std::condition_variable` in `RAGBot.cpp`; `QEventLoop` + `QTimer` in `GeneratorIP`/`RerankGeneratorIP`. Both work, but mixing is unidiomatic in Qt code; `QThread` with signal/slot wakeups would compose more naturally with the rest of the codebase.
+Resolved with 1.1: `std::thread` / `std::condition_variable` were removed in commit `b96c80e`. Only the `QEventLoop` + `QTimer` pattern in `GeneratorIP` / `RerankGeneratorIP` remains.
 
 ---
 
 ## 3. Error handling
 
-### 3.1 Silent zero-score path in `RerankGeneratorIP::score` *(medium)*
+### 3.1 Silent zero-score path in `RerankGeneratorIP::score` *(medium — resolved)*
 
-`src/generation/RerankGeneratorIP.cpp:61-71`. The scores vector is pre-initialised with zeros (line 61). If the response is missing `"results"` or has unparseable shape, the loop produces no overrides and the all-zeros vector returns silently.
+Fixed: `RerankGeneratorIP::score` now calls `qWarning()` when the parsed `results` array is empty (full failure) or shorter than `documents.size()` (partial failure).
 
-`Reranker` downstream only catches *size* mismatch (`src/asset/Reranker.cpp:45`) — an all-zeros same-size response passes the check and produces an arbitrary "top-N" with similarity 0. Compare to `GeneratorIP::parseEmbeddingResponse`, which warns on empty array.
+### 3.2 Successful research is dropped on roleplay failure *(low — resolved)*
 
-*What to do:* `qWarning()` if the parsed `results` array is empty or shorter than `documents.size()`.
-
-### 3.2 Successful research is dropped on roleplay failure *(low)*
-
-`src/RAGBot.cpp:111-113`. If `m_enableRoleplay && roleplayerFailed`, the function returns before `logConversation()` (line 116) and before the history append. The researcher's answer is lost from the DB and from history despite being valid.
-
-*What to do:* log the conversation (with empty `roleplayAnswer`) before returning, or only short-circuit on researcher failure.
+Already fixed in the current `RAGBot.cpp` — the function is sequential and always reaches `logConversation()` regardless of whether roleplay produced output. `roleplayAnswer` is simply an empty string when roleplay is disabled or fails.
 
 ---
 
@@ -93,15 +75,13 @@ Currently safe only because the cond-var serialises the two stages (see 1.1). Th
 
 *What to do:* pick one canonical key, log a deprecation warning when the other is used, or remove the fallback if no live config still uses it.
 
-### 4.3 `RAGBot::processQuestion` does too much *(low)*
+### 4.3 `RAGBot::processQuestion` does too much *(low — partially resolved)*
 
-80 lines mixing pipeline logic, thread setup, cond-var plumbing, error checking, history append, and DB write. The threading scaffolding is roughly half the function. Extracting `runResearcherAsync()` / `runRoleplayerAsync()` helpers would let the pipeline shape read top-to-bottom in ~15 lines.
+Threading removed in `b96c80e`; function is now ~35 lines. Remaining mix of pipeline logic, error checks, history append, and DB write is acceptable at this size.
 
-### 4.4 Inconsistent disable-on-failure policy *(low)*
+### 4.4 Inconsistent disable-on-failure policy *(low — resolved)*
 
-`Reranker` (`src/asset/Reranker.cpp:15-19`) cleanly disables itself if its generator fails to init — `isEnabled()` returns false and the stage is skipped. `Researcher` and `Roleplayer` instead carry an invalid generator and refuse work per call (`Researcher.cpp:23`, `Roleplayer.cpp:23`). Both work; the asymmetry is noise.
-
-*What to do:* pick one. The reranker's "disable yourself" pattern is cleaner — failure is detected once at startup, not on every call.
+Fixed: `Researcher` and `Roleplayer` now reset their generator to `nullptr` in the constructor when init fails, matching the reranker's pattern. Startup warning fires once; the per-call null check is still present but no longer emits redundant warnings.
 
 ---
 
@@ -117,17 +97,17 @@ Currently safe only because the cond-var serialises the two stages (see 1.1). Th
 
 ## Severity table
 
-| #   | Item                                                  | Severity | File:line                                |
-|-----|-------------------------------------------------------|----------|------------------------------------------|
-| 1.1 | Threaded pipeline doesn't parallelise                 | Medium   | `src/RAGBot.cpp:67-104`                  |
-| 1.2 | Inconsistent enable/disable convention                | Low      | `src/main.cpp:125`, `src/asset/Reranker.cpp:10` |
-| 1.3 | `similarity` field repurposed for rerank score       | Medium   | `src/asset/Reranker.cpp:63`              |
-| 2.1 | Stdout writes bypass `ThreadSafeOutput`               | Medium   | `EmbeddedTextGenerator.cpp:128`, `Researcher.cpp:50,52`, `Roleplayer.cpp:47,49` |
-| 2.2 | By-reference lambda capture on `readyRead`            | Low      | `src/generation/GeneratorIP.cpp:154-158` |
-| 2.3 | Mixed `std::thread` and Qt event-loop threading        | Low      | `RAGBot.cpp` vs `GeneratorIP.cpp`        |
-| 3.1 | Silent zero-score path on malformed rerank response   | Medium   | `src/generation/RerankGeneratorIP.cpp:61-71` |
-| 3.2 | Research answer dropped if roleplayer fails           | Low      | `src/RAGBot.cpp:111-113`                 |
-| 4.1 | Magic config keys, no central schema                  | Low      | `main.cpp` + every asset constructor     |
-| 4.2 | `basePath` / `remotePath` undocumented aliasing       | Low      | `GeneratorIP.cpp:32-33`, `RerankGeneratorIP.cpp:29-30` |
-| 4.3 | `processQuestion` mixes pipeline + threading plumbing | Low      | `src/RAGBot.cpp:42-121`                  |
-| 4.4 | Inconsistent disable-on-failure policy                | Low      | `Reranker.cpp:15-19` vs `Researcher.cpp:23`, `Roleplayer.cpp:23` |
+| #   | Item                                                  | Severity | Status   | File:line                                |
+|-----|-------------------------------------------------------|----------|----------|------------------------------------------|
+| 1.1 | Threaded pipeline doesn't parallelise                 | Medium   | Resolved | commit `b96c80e`                         |
+| 1.2 | Inconsistent enable/disable convention                | Low      | Open     | `src/main.cpp:125`, `src/asset/Reranker.cpp:10` |
+| 1.3 | `similarity` field repurposed for rerank score        | Medium   | Resolved | `EmbeddingDatabase.h`, `Reranker.cpp`, `Researcher.cpp` |
+| 2.1 | Stdout writes bypass `ThreadSafeOutput`               | Medium   | Resolved | commit `b96c80e`                         |
+| 2.2 | By-reference lambda capture on `readyRead`            | Low      | Resolved | `src/generation/GeneratorIP.cpp`         |
+| 2.3 | Mixed `std::thread` and Qt event-loop threading       | Low      | Resolved | commit `b96c80e`                         |
+| 3.1 | Silent zero-score path on malformed rerank response   | Medium   | Resolved | `src/generation/RerankGeneratorIP.cpp`   |
+| 3.2 | Research answer dropped if roleplayer fails           | Low      | Resolved | `src/RAGBot.cpp` (sequential flow)       |
+| 4.1 | Magic config keys, no central schema                  | Low      | Open     | `main.cpp` + every asset constructor     |
+| 4.2 | `basePath` / `remotePath` undocumented aliasing       | Low      | Open     | `GeneratorIP.cpp:32-33`, `RerankGeneratorIP.cpp:29-30` |
+| 4.3 | `processQuestion` mixes pipeline + threading plumbing | Low      | Resolved | commit `b96c80e`                         |
+| 4.4 | Inconsistent disable-on-failure policy                | Low      | Resolved | `Researcher.cpp`, `Roleplayer.cpp` constructors      |

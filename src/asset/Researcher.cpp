@@ -10,7 +10,12 @@ Researcher::Researcher(const QJsonObject& config)
     : m_generator(GeneratorFactory::createText(config.value("generator").toObject()))
     , m_instruction(config.value("instruction").toString(
           "You are a helpful assistant. Answer the question using only the provided context."))
-{}
+{
+    if (!m_generator || !m_generator->isValid()) {
+        qWarning() << "Researcher: generator failed to initialise — disabled";
+        m_generator.reset();
+    }
+}
 
 
 //--------------------------------------------------------------------------------
