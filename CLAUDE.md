@@ -102,25 +102,24 @@ Required llama.cpp libs: `libcommon.a`, `libllama.a`, `libggml.a`, `libggml-base
 
 ## Architecture
 
-Four-stage pipeline (researcher and roleplayer run in separate threads; roleplayer waits on a condition variable until researcher finishes):
+Four-stage pipeline (sequential — the roleplayer's prompt embeds the full research answer, so the stages cannot overlap):
 
 ```
 User question
     │
     ▼
-Embedder::search()               — embeds query, queries VectorIndex
+Embedder::search()          — embeds query, queries VectorIndex
     │  SearchResult[]
     ▼
-Reranker::rerank()               — scores chunks, sorts descending, returns top-N
-    │  SearchResult[] (reranked)  (skipped if reranker disabled)
-    ├──────────────────────────────────────────────┐
-    ▼                                              │ (waits for researcher)
-Researcher::research()           — context block → TextGenerator (streamed)
-    │  research answer                             │
-    │                                              ▼
-    │                              Roleplayer::respond() — in-character reply
-    │                                              │
-    ▼◄─────────────────────────────────────────────┘
+Reranker::rerank()          — scores chunks, sorts descending, returns top-N
+    │  SearchResult[]        (skipped if reranker disabled)
+    ▼
+Researcher::research()      — builds context block, calls TextGenerator (streamed)
+    │  research answer
+    ▼
+Roleplayer::respond()       — formats prompt, calls TextGenerator in-character
+    │
+    ▼
 Console output
 ```
 
@@ -138,9 +137,6 @@ Console output
 - `EmbeddedRerankGenerator` — llama.cpp cross-encoder; uses `LLAMA_POOLING_TYPE_RANK`; picks up model's built-in `rerank` chat template if present, otherwise falls back to EOS/SEP-separated query+document
 - `Reranker` — asset class; scores all retrieved chunks, sorts descending, returns top-N; no-op if disabled or generator invalid
 - `GeneratorFactory::createRerank(config)` — same embedded/network dispatch as other generators
-
-**Utilities** (`src/util/`):
-- `ThreadSafeOutput` — mutex-guarded `write(QString)` / `flush()` for stdout; used by `GeneratorIP` SSE streaming so concurrent threads don't interleave output
 
 **Parsing / indexing layer** (`src/parsers/`, `src/asset/Embedder.cpp`):
 - `CDDAResolver` — `buildRegistry(dir)` scans all JSON files and builds an `id → QJsonObject` map; `resolve(obj, registry)` walks `copy-from` chains and merges parent fields so each stored object contains complete effective stats

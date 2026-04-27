@@ -7,7 +7,6 @@
 #include <QTextStream>
 #include <QDebug>
 #include "GeneratorIP.h"
-#include "../util/ThreadSafeOutput.h"
 
 
 //--------------------------------------------------------------------------------
@@ -154,7 +153,7 @@ auto GeneratorIP::generateText(
         QObject::connect(reply, &QNetworkReply::readyRead, [&]() {
             const QString chunk = parseStreamChunk(reply->readAll());
             streamed += chunk;
-            ThreadSafeOutput::write(chunk);
+            QTextStream(stdout) << chunk << Qt::flush;
         });
     }
 

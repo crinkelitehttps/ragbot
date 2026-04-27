@@ -20,8 +20,7 @@ SOURCES += \
     src/generation/RerankGeneratorIP.cpp \
     src/parsers/CDDAResolver.cpp \
     src/parsers/ManPageResolver.cpp \
-    src/parsers/ParserJSON.cpp \
-    src/util/ThreadSafeOutput.cpp
+    src/parsers/ParserJSON.cpp
 
 HEADERS += \
     src/ConversationTurn.h \
@@ -42,8 +41,7 @@ HEADERS += \
     src/parsers/CDDAResolver.h \
     src/parsers/ManPageResolver.h \
     src/parsers/Parser.h \
-    src/parsers/ParserJSON.h \
-    src/util/ThreadSafeOutput.h
+    src/parsers/ParserJSON.h
 
 # ---------------------------------------------------------------------------
 # Embedded inference — build with: qmake CONFIG+=embedded_inference
