@@ -2,15 +2,12 @@
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFile>
-#include <QThread>
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonObject>
 
-#include "asset/Embedder.h"
-#include "asset/Reranker.h"
-#include "db/RoleplayDatabase.h"
 #include "RAGBot.h"
+#include "RAGBotSession.h"
 #include "ConfigKeys.h"
 
 auto main(int argc, char *argv[]) -> int
@@ -47,7 +44,7 @@ auto main(int argc, char *argv[]) -> int
 
     const QCommandLineOption skipIndexOpt(
         {"s", "skip-index"},
-        "Skip the embedding/indexing pass and go straight to the chat loop using whatever is already in the database.");
+        "Skip the embedding/indexing pass and go straight to the chat loop.");
 
     cli.addOption(configOpt);
     cli.addOption(dataOpt);
@@ -94,45 +91,11 @@ auto main(int argc, char *argv[]) -> int
 
     const bool loadOnly = cli.isSet(loadOpt);
 
-    // All heavy objects (and their QNetworkAccessManagers) live on the worker thread.
-    // The main thread runs app.exec() unblocked; the worker blocks on stdin between turns.
-    QThread* worker = QThread::create([root, loadOnly]() {
-        Embedder embedder(root.value(ConfigKeys::Embedder).toObject());
-        if (!embedder.isValid()) {
-            qWarning() << "main: failed to construct embedder";
-            QCoreApplication::exit(1);
-            return;
-        }
-        qDebug() << "main: embedder ready";
+    RAGBotSession session(root, loadOnly);
+    if (!session.isValid()) return 1;
+    if (loadOnly) return 0;
 
-        if (loadOnly) {
-            qDebug() << "main: load-only mode complete";
-            QCoreApplication::quit();
-            return;
-        }
-
-        Reranker reranker(root.value(ConfigKeys::Reranker).toObject());
-        qDebug() << "main: reranker ready (enabled:" << reranker.isEnabled() << ")";
-
-        Researcher researcher(root.value(ConfigKeys::Researcher).toObject());
-        qDebug() << "main: researcher ready";
-
-        Roleplayer roleplayer(root.value(ConfigKeys::Roleplayer).toObject());
-        qDebug() << "main: roleplayer ready";
-
-        RoleplayDatabase roleplayDb(root.value(ConfigKeys::ConversationsDb).toString("conversations.db"));
-        qDebug() << "main: roleplay database ready";
-
-        const bool enableRoleplay = root.value(ConfigKeys::Roleplayer).toObject().value(ConfigKeys::Enabled).toBool(false);
-        RAGBot ragbot(embedder, reranker, researcher, roleplayer, roleplayDb, enableRoleplay);
-        ragbot.start();
-    });
-
-    QObject::connect(worker, &QThread::finished, &app, &QCoreApplication::quit);
-    worker->start();
-
-    const int exitCode = app.exec();
-    worker->wait();
-    delete worker;
-    return exitCode;
+    RAGBot ragbot(session);
+    ragbot.start();
+    return 0;
 }

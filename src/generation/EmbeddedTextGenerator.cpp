@@ -67,7 +67,8 @@ EmbeddedTextGenerator::~EmbeddedTextGenerator()
 auto EmbeddedTextGenerator::generateText(
         const QString& systemPrompt,
         bool isStream,
-        const QString& prompt
+        const QString& prompt,
+        const TokenSink& tokenSink
 ) -> QString
 {
     if (!m_isValid) return {};
@@ -126,7 +127,12 @@ auto EmbeddedTextGenerator::generateText(
             const bool visible = !inThinkBlock || m_enableThinking;
             if (visible) {
                 response += piece;
-                if (isStream) QTextStream(stdout) << piece << Qt::flush;
+                if (isStream) {
+                    if (tokenSink)
+                        tokenSink(QStringView(piece));
+                    else
+                        QTextStream(stdout) << piece << Qt::flush;
+                }
             }
             if (piece == "</think>")  inThinkBlock = false;
         }

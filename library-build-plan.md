@@ -61,7 +61,22 @@ Add `b-lib.sh` mirroring `b-clean.sh` but invoking `qmake CONFIG+="library embed
 
 ---
 
-## Phase 2 — Lifecycle API (Qt-internal, C++-only)
+## Phase 2 — Lifecycle API (Qt-internal, C++-only) ✅ DONE
+
+### What was done
+
+- `TextGenerator::TokenSink` (`std::function<void(QStringView)>`) added to the interface; `generateText()` accepts an optional sink parameter.
+- `GeneratorIP` and `EmbeddedTextGenerator` route streamed tokens to the sink when set, otherwise fall through to stdout as before.
+- `Researcher::research()` and `Roleplayer::respond()` accept and forward the sink; prefix lines ("Researcher: ", "{Name}: ") are only printed to stdout when no sink is provided.
+- `Roleplayer` reads `assetsDir` from its config section (key `"assetsDir"`, default `"inputs"`); file path becomes `assetsDir + "/roleplayPrompt.txt"`.
+- `ConfigKeys::AssetsDir` added.
+- `RAGBotSession` (`src/RAGBotSession.h/.cpp`) owns the worker `QThread`, all pipeline objects, conversation history, and the dispatch loop. `ask(question, tokenSink)` is thread-safe and blocks until the answer is returned.
+- `RAGBot` reduced to a stdin-loop wrapper that calls `session.ask()`.
+- `main.cpp` simplified: constructs `RAGBotSession`, optionally `RAGBot`, no manual `QThread` creation.
+- `ragbot.pro` updated with `RAGBotSession` in SOURCES/HEADERS.
+- Console binary builds and links cleanly (network-only mode verified).
+
+## Phase 2 (original spec) — Lifecycle API (Qt-internal, C++-only)
 
 Before exposing a C ABI, refactor `main.cpp`'s setup logic into a reusable session class. This is the natural extraction point and keeps the existing executable working.
 

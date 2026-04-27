@@ -17,7 +17,8 @@ public:
     auto generateText(
         const QString& systemPrompt,
         bool isStream,
-        const QString& prompt
+        const QString& prompt,
+        const TokenSink& tokenSink = {}
     ) -> QString override;
 
     [[nodiscard]] auto isValid() const -> bool override { return m_isValid; }

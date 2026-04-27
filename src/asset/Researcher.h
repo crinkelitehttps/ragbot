@@ -16,7 +16,8 @@ public:
     auto research(
         const QString& question,
         const QVector<EmbeddingDatabase::SearchResult>& results,
-        const QVector<ConversationTurn>& history
+        const QVector<ConversationTurn>& history,
+        const TextGenerator::TokenSink& tokenSink = {}
     ) -> QString;
 
 private:

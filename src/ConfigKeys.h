@@ -31,6 +31,7 @@ namespace ConfigKeys {
     // ── Roleplayer ────────────────────────────────────────────────────────────
     inline const QLatin1String CharacterName       { "characterName"       };
     inline const QLatin1String CharacterBackground { "characterBackground" };
+    inline const QLatin1String AssetsDir           { "assetsDir"           };
 
     // ── Generator block ───────────────────────────────────────────────────────
     inline const QLatin1String Backend        { "backend"        };

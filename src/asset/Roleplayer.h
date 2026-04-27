@@ -15,7 +15,8 @@ public:
     auto respond(
         const QString& researchAnswer,
         const QString& question,
-        const QVector<ConversationTurn>& history
+        const QVector<ConversationTurn>& history,
+        const TextGenerator::TokenSink& tokenSink = {}
     ) -> QString;
 
     [[nodiscard]] auto characterName() const -> const QString& { return m_characterName; }
@@ -24,6 +25,7 @@ private:
     std::unique_ptr<TextGenerator> m_generator;
     QString                        m_characterName;
     QString                        m_characterBackground;
+    QString                        m_assetsDir;
 };
 
 #endif // ROLEPLAYER_H

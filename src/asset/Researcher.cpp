@@ -23,7 +23,8 @@ Researcher::Researcher(const QJsonObject& config)
 auto Researcher::research(
         const QString& question,
         const QVector<EmbeddingDatabase::SearchResult>& results,
-        const QVector<ConversationTurn>& history
+        const QVector<ConversationTurn>& history,
+        const TextGenerator::TokenSink& tokenSink
 ) -> QString
 {
     if (!m_generator || !m_generator->isValid()) {
@@ -58,9 +59,11 @@ auto Researcher::research(
     }
     prompt += "Context:\n" + context + "\nQuestion: " + question;
 
-    QTextStream(stdout) << "\nResearcher: " << Qt::flush;
-    const QString answer = m_generator->generateText(m_instruction, /*stream=*/true, prompt);
-    QTextStream(stdout) << "\n" << Qt::flush;
+    if (!tokenSink)
+        QTextStream(stdout) << "\nResearcher: " << Qt::flush;
+    const QString answer = m_generator->generateText(m_instruction, /*stream=*/true, prompt, tokenSink);
+    if (!tokenSink)
+        QTextStream(stdout) << "\n" << Qt::flush;
 
     return answer;
 }

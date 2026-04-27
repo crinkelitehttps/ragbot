@@ -132,7 +132,8 @@ auto GeneratorIP::parseStreamChunk(const QByteArray& data) -> QString
 auto GeneratorIP::generateText(
         const QString& systemPrompt,
         bool isStream,
-        const QString& prompt
+        const QString& prompt,
+        const TokenSink& tokenSink
 ) -> QString
 {
     if (!m_isValid) return {};
@@ -161,7 +162,10 @@ auto GeneratorIP::generateText(
         QObject::connect(reply, &QNetworkReply::readyRead, [&]() {
             const QString chunk = parseStreamChunk(reply->readAll());
             streamed += chunk;
-            QTextStream(stdout) << chunk << Qt::flush;
+            if (tokenSink)
+                tokenSink(QStringView(chunk));
+            else
+                QTextStream(stdout) << chunk << Qt::flush;
         });
     }
 

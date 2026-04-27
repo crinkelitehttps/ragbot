@@ -8,6 +8,7 @@ CONFIG -= release
 SOURCES += \
     src/main.cpp \
     src/RAGBot.cpp \
+    src/RAGBotSession.cpp \
     src/asset/Embedder.cpp \
     src/asset/Reranker.cpp \
     src/asset/Researcher.cpp \
@@ -26,6 +27,7 @@ HEADERS += \
     src/ConfigKeys.h \
     src/ConversationTurn.h \
     src/RAGBot.h \
+    src/RAGBotSession.h \
     src/asset/Embedder.h \
     src/asset/Reranker.h \
     src/asset/Researcher.h \
