@@ -16,14 +16,14 @@ The single largest architectural lever — the one change that unlocks most of t
 
 ### Features that must be preserved
 
-- Three-stage pipeline: **retrieve → research → roleplay** (`RAGBot.cpp:39-73`).
-- Optional **rerank** stage between retrieve and research (`RAGBot.cpp:52-53`, `Reranker::isEnabled`).
+- Three-stage pipeline: **retrieve → research → roleplay** (`RAGBotSession::processQuestion`).
+- Optional **rerank** stage between retrieve and research (`Reranker::isEnabled`).
 - Per-stage **embedded *or* network backend** selection via `config.json["...generator"]["backend"]` (`GeneratorFactory.cpp`).
 - **CDDA `copy-from` resolution** with multiple-inheritance merging up to depth 16 (`CDDAResolver.cpp:38`).
 - **Man-page parser** as an alternative source kind (`ManPageResolver`, selected via `parserType: "man_page"`).
 - **Incremental re-index** keyed by per-file SHA-256 (`Embedder.cpp:115-119`); unchanged files are skipped.
 - **Conversation logging** to a separate SQLite database (`RoleplayDatabase`).
-- **History-aware prompts**: the last `MaxHistoryTurns = 2` turns are passed to Researcher and Roleplayer (`RAGBot.h:14`, `RAGBot.cpp:70-72`).
+- **History-aware prompts**: the last `MaxHistoryTurns = 2` turns are passed to Researcher and Roleplayer (`RAGBotSession.h`, `RAGBotSession::processQuestion`).
 - **Streaming output** to stdout for the Researcher answer.
 - **CLI overrides** for config path, data dir, db path, plus skip-index and load-only modes (`main.cpp` argument parsing).
 
@@ -39,7 +39,9 @@ Grouped by theme, with file:line citations. Severity ordering is roughly highest
 
 ### 3.1 The pipeline is a god-object with hard-wired stages
 
-`RAGBot::processQuestion` (`src/RAGBot.cpp:39-73`) *is* the orchestration. Stages are concrete classes (`Embedder`, `Reranker`, `Researcher`, `Roleplayer`) held by reference in `RAGBot.h:25-29`, constructed by name in `main.cpp`, and called in a fixed order. To add a stage, swap one out, A/B two researchers, or run two pipelines in parallel, you edit `RAGBot.cpp` and recompile. The reranker enable/disable lives as an `if` (`RAGBot.cpp:52-53`); the roleplay enable/disable lives as another `if` (`RAGBot.cpp:63`). There is no Stage interface, no Pipeline type, no composition.
+`RAGBotSession::processQuestion` (`src/RAGBotSession.cpp`) *is* the orchestration. Stages are concrete classes (`Embedder`, `Reranker`, `Researcher`, `Roleplayer`) owned by `RAGBotSession`, constructed in `workerRun()`, and called in a fixed order. To add a stage, swap one out, A/B two researchers, or run two pipelines in parallel, you edit `RAGBotSession.cpp` and recompile. The reranker enable/disable lives as an `if`; the roleplay enable/disable lives as another `if`. There is no Stage interface, no Pipeline type, no composition.
+
+*(Note: `RAGBot` itself has been reduced to a thin stdin-loop wrapper calling `session.ask()`. The orchestration that was in `RAGBot::processQuestion` moved to `RAGBotSession::processQuestion` as part of the library build work.)*
 
 ### 3.2 Generation backends duplicate plumbing instead of sharing it
 
@@ -53,9 +55,11 @@ Grouped by theme, with file:line citations. Severity ordering is roughly highest
 
 The shape implies "the embedded/network distinction is the dominant axis of variation." It isn't. The dominant axes are *embedding vs text vs rerank* (request/response shape) and *blocking vs streaming* (transport). The current taxonomy gets it wrong and pays for that with copy-paste.
 
-### 3.3 Synchronous everything, on one thread
+### 3.3 Synchronous everything, on one thread *(partially addressed)*
 
-`RAGBot::start()` reads stdin synchronously (`RAGBot.cpp:24-26`). Every downstream call (`Embedder::search`, `Reranker::rerank`, `Researcher::research`, `Roleplayer::respond`) blocks. A misconfigured remote inference server can stall the REPL for 240 seconds (`GeneratorIP` default timeout) with no way to cancel short of SIGINT. Streaming is `QTextStream(stdout) << chunk << Qt::flush` per token (`GeneratorIP.cpp:152-158`, `EmbeddedTextGenerator.cpp:128`) — fine for a single user, but it tightly couples generation progress to terminal I/O and gives the Roleplayer no way to consume the Researcher's stream incrementally even though feature C in `bugs-and-features.md` is checked off as "streaming output" — what actually exists is *output* streaming, not *pipeline* streaming.
+`RAGBot::start()` reads stdin on the main thread and calls `session.ask()`, which dispatches to a dedicated worker thread (`RAGBotSession`). Every pipeline call (`Embedder::search`, `Reranker::rerank`, `Researcher::research`, `Roleplayer::respond`) still blocks sequentially on the worker. A misconfigured remote inference server can stall the REPL for 240 seconds (`GeneratorIP` default timeout) with no way to cancel short of SIGINT.
+
+Streaming now routes through `TextGenerator::TokenSink` (`std::function<void(QStringView)>`), decoupling token delivery from stdout — the sink is library-friendly. But the pipeline is still sequential: Roleplayer still waits for the full Researcher answer. What exists is *output* streaming, not *pipeline* streaming.
 
 ### 3.4 `VectorIndex` is the load-bearing fragility
 
@@ -65,9 +69,9 @@ The shape implies "the embedded/network distinction is the dominant axis of vari
 
 `EmbeddingDatabase::SchemaVersion = 5` (`EmbeddingDatabase.h:77`). On a mismatch, all tables are dropped and recreated (`EmbeddingDatabase.cpp:80-94`). There is no migration path. Any change to the chunk format — adding a column, switching embedding model, changing flatten rules — requires reindexing the entire corpus from scratch. For a CDDA-sized corpus on an embedded model, that is a multi-hour wait per format change. The cost is so high that the system actively discourages the kind of iteration on chunk format you'd actually want to do.
 
-### 3.6 Config is stringly-typed and validated lazily
+### 3.6 Config is stringly-typed and validated lazily *(partially resolved)*
 
-Config keys (`embedder`, `reranker`, `reranker.generator.modelPath`, `enableRoleplay`, `parserType`, etc.) are looked up by literal string at the call site, scattered across `main.cpp`, `GeneratorFactory.cpp`, and the asset constructors. CLI flags mutate the loaded `QJsonObject` directly (`main.cpp:78-92`) rather than going through a typed setter. There is no schema, no defaults table, no validation pass. If `reranker.enabled` is true but `reranker.generator.modelPath` is empty, you find out partway through pipeline construction. If `enableRoleplay` is placed under `researcher.generator` instead of at the root (a real bug fixed in commit `2f9186d`), you find out by reading `main.cpp` source.
+Config keys are now centralised in `src/ConfigKeys.h` as `inline const QLatin1String` constants (28 keys, all callers use `ConfigKeys::` names). Key renaming is now a one-file change. The deeper problems remain: there is no schema, no defaults table, no validation pass — if `reranker.enabled` is true but `reranker.generator.modelPath` is empty, you find out partway through pipeline construction. CLI flags mutate the loaded `QJsonObject` directly rather than going through a typed setter. The `enableRoleplay` root-level key was moved to `roleplayer.enabled` (nested, consistent with reranker) — the placement bug class is fixed. Full typed-config validation (§4.7) is still the right long-term fix.
 
 ### 3.7 Rollback semantics are inconsistent
 

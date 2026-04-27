@@ -9,8 +9,9 @@ RAGBot is a C++/Qt5 console application implementing a three-stage RAG pipeline 
 ## Directory Layout
 
 ```
-ragbot/           ← source root (this repo)
-../build-ragbot/  ← build output directory (sibling, created manually)
+ragbot/               ← source root (this repo)
+../build-ragbot/      ← executable build output (sibling, created manually)
+../build-ragbot-lib/  ← library build output (sibling, created by b-lib.sh)
 ```
 
 All scripts are run from the **source root**. The build artefacts, Makefile, and binary live in `../build-ragbot/`.
@@ -21,6 +22,7 @@ All scripts are run from the **source root**. The build artefacts, Makefile, and
 |--------|-------------|
 | `b.sh` | qmake (no embedded inference) + make — fast incremental build |
 | `b-clean.sh` | make clean + qmake `CONFIG+=embedded_inference` + `bear -- make` — full rebuild with llama.cpp, also regenerates `compile_commands.json` |
+| `b-lib.sh` | Builds `libragbot.a` into `../build-ragbot-lib/` with `CONFIG+="library embedded_inference"` |
 | `scan.sh` | Same as `b-clean.sh` — alias used when regenerating compile_commands is the goal |
 | `run.sh` | Copies `config.json` to `../build-ragbot/`, then launches the binary under **gdb** |
 | `dump-cpp.sh` | Prints all `.h`/`.cpp` source files to stdout — useful for pasting into LLM context |
@@ -50,6 +52,12 @@ qmake CONFIG+=embedded_inference ../ragbot
 make -j$(nproc)
 ```
 
+**Library build** — produces `libragbot.a` instead of the console executable; the two flags compose:
+```bash
+qmake CONFIG+="library embedded_inference" ../ragbot
+make -j$(nproc)
+```
+
 ## Dependencies
 
 **Always required:** Qt 5.15.2 at `/home/joe/Qt/5.15.2/gcc_64` (not system Qt — the system has 5.15.18 which causes a runtime crash). System libs: `-lpthread -ldl -lm -lstdc++ -lsqlite3`.
@@ -70,7 +78,6 @@ Required llama.cpp libs: `libcommon.a`, `libllama.a`, `libggml.a`, `libggml-base
 
 ```json
 {
-  "enableRoleplay": true,
   "reranker": {
     "enabled": false,
     "topN": 5,
@@ -86,12 +93,16 @@ Required llama.cpp libs: `libcommon.a`, `libllama.a`, `libggml.a`, `libggml-base
     "generator": { "backend": "embedded", "modelPath": "/path/to/model.gguf" }
   },
   "roleplayer": {
+    "enabled": true,
     "characterName": "Survivor",
     "characterBackground": "...",
+    "assetsDir": "inputs",
     "generator": { "backend": "embedded", "modelPath": "/path/to/model.gguf" }
   }
 }
 ```
+
+All config key strings are defined as `inline const QLatin1String` constants in `src/ConfigKeys.h`.
 
 **CLI flags** (override config at runtime):
 - `-c / --config` — path to config JSON
@@ -123,9 +134,13 @@ Roleplayer::respond()       — formats prompt, calls TextGenerator in-character
 Console output
 ```
 
+**Session / orchestration layer** (`src/`):
+- `RAGBotSession` — owns the worker `QThread`, all pipeline objects (Embedder, Reranker, Researcher, Roleplayer, RoleplayDatabase), and conversation history. `ask(question, tokenSink)` is thread-safe and blocks until the answer returns. Pipeline objects are constructed and destroyed on the worker thread.
+- `RAGBot` — thin stdin-loop wrapper; reads questions from stdin, calls `session.ask()`, handles "quit"/"exit".
+
 **Generation layer** (`src/generation/`):
 - `EmbeddingGenerator` — interface: `generate(QString) → QVector<float>`
-- `TextGenerator` — interface: `generateText(system, stream, prompt) → QString`
+- `TextGenerator` — interface: `generateText(system, stream, prompt, tokenSink) → QString`; `TokenSink` is `std::function<void(QStringView)>` — when set, streamed tokens go to the sink instead of stdout
 - `GeneratorIP` — implements both; HTTP calls to OpenAI-compatible server (`/v1/embeddings`, `/v1/chat/completions`), SSE streaming
 - `EmbeddedEmbeddingGenerator` — implements `EmbeddingGenerator`; in-process llama.cpp, pooling=MEAN
 - `EmbeddedTextGenerator` — implements `TextGenerator`; in-process llama.cpp, ChatML prompt format

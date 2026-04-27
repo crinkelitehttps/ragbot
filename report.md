@@ -2,14 +2,14 @@
 
 ## Summary
 
-**Updated after four follow-up sessions.** All four medium items are resolved. Three low items remain open.
+**Updated after five follow-up sessions.** All medium and low items are resolved.
 
-The threading was reverted entirely (commit `b96c80e`). The `readyRead` by-reference capture was fixed with an explicit `disconnect()`. Items 3.2 and 5 were found already resolved in the current code.
+The threading was reverted entirely (commit `b96c80e`). The `readyRead` by-reference capture was fixed with an explicit `disconnect()`. Items 3.2 and 5 were found already resolved in the current code. The three remaining low items were resolved in later sessions: `ConfigKeys.h` centralises all config key strings (4.1), `basePath`/`remotePath` now logs a deprecation warning (4.2), and `enableRoleplay` was moved inside the roleplayer config block matching the reranker's nested convention (1.2).
 
 | Severity | Open | Resolved |
 |----------|------|----------|
 | Medium   | 0    | 4        |
-| Low      | 3    | 5        |
+| Low      | 0    | 8        |
 | Critical | 0    | —        |
 
 ---
@@ -20,12 +20,9 @@ The threading was reverted entirely (commit `b96c80e`). The `readyRead` by-refer
 
 Threading reverted in commit `b96c80e`. `processQuestion` is now fully sequential; `std::thread`, `std::mutex`, `std::condition_variable`, and the `ThreadSafeOutput` helper have been removed.
 
-### 1.2 Two on/off conventions in the config schema *(low)*
+### 1.2 Two on/off conventions in the config schema *(low — resolved)*
 
-- `enableRoleplay` is a root-level boolean (`src/main.cpp:125`).
-- `reranker.enabled` is nested inside the reranker block (`src/asset/Reranker.cpp:10`).
-
-Two stages, two conventions. Pick one — nested is more scalable.
+`enableRoleplay` was a root-level boolean; `reranker.enabled` was nested. Fixed: `enableRoleplay` removed from root; `roleplayer.enabled` is now the canonical key, read via `ConfigKeys::Enabled` from the roleplayer config block — consistent with the reranker's pattern.
 
 ### 1.3 `SearchResult::similarity` field is re-purposed *(medium — resolved)*
 
@@ -63,17 +60,13 @@ Already fixed in the current `RAGBot.cpp` — the function is sequential and alw
 
 ## 4. Code smells & readability
 
-### 4.1 Magic config keys scattered across files *(low)*
+### 4.1 Magic config keys scattered across files *(low — resolved)*
 
-`"embedder"`, `"reranker"`, `"researcher"`, `"roleplayer"`, `"enableRoleplay"`, `"conversationsDb"` in `main.cpp:79-126`; `"generator"`, `"instruction"`, `"characterName"`, `"modelPath"`, `"backend"`, etc. in each asset constructor and each generator. No central key list, no JSON schema. Renaming a key is a multi-file grep.
+Fixed: `src/ConfigKeys.h` now holds all 28 config key constants as `inline const QLatin1String` values in the `ConfigKeys` namespace. Every `.cpp` file that reads config uses `ConfigKeys::` names — renaming any key is a one-file change.
 
-*What to do:* a single header (`ConfigKeys.h`) of `inline constexpr const char* kEmbedder = "embedder";` constants — or at minimum, document the schema in `CLAUDE.md`.
+### 4.2 `basePath` ↔ `remotePath` silent aliasing *(low — resolved)*
 
-### 4.2 `basePath` ↔ `remotePath` silent aliasing *(low)*
-
-`src/generation/GeneratorIP.cpp:32-33` and `src/generation/RerankGeneratorIP.cpp:29-30` both fall back from `basePath` to `remotePath` with no log line. The legacy name isn't mentioned in `CLAUDE.md` or the example config.
-
-*What to do:* pick one canonical key, log a deprecation warning when the other is used, or remove the fallback if no live config still uses it.
+Fixed: both `GeneratorIP` and `RerankGeneratorIP` now log `qWarning()` when the deprecated `remotePath` key is used, directing users to `basePath`. The fallback is retained for backwards compatibility but is no longer silent.
 
 ### 4.3 `RAGBot::processQuestion` does too much *(low — partially resolved)*
 
@@ -100,14 +93,14 @@ Fixed: `Researcher` and `Roleplayer` now reset their generator to `nullptr` in t
 | #   | Item                                                  | Severity | Status   | File:line                                |
 |-----|-------------------------------------------------------|----------|----------|------------------------------------------|
 | 1.1 | Threaded pipeline doesn't parallelise                 | Medium   | Resolved | commit `b96c80e`                         |
-| 1.2 | Inconsistent enable/disable convention                | Low      | Open     | `src/main.cpp:125`, `src/asset/Reranker.cpp:10` |
+| 1.2 | Inconsistent enable/disable convention                | Low      | Resolved | `roleplayer.enabled` now nested; `ConfigKeys::Enabled` |
 | 1.3 | `similarity` field repurposed for rerank score        | Medium   | Resolved | `EmbeddingDatabase.h`, `Reranker.cpp`, `Researcher.cpp` |
 | 2.1 | Stdout writes bypass `ThreadSafeOutput`               | Medium   | Resolved | commit `b96c80e`                         |
 | 2.2 | By-reference lambda capture on `readyRead`            | Low      | Resolved | `src/generation/GeneratorIP.cpp`         |
 | 2.3 | Mixed `std::thread` and Qt event-loop threading       | Low      | Resolved | commit `b96c80e`                         |
 | 3.1 | Silent zero-score path on malformed rerank response   | Medium   | Resolved | `src/generation/RerankGeneratorIP.cpp`   |
 | 3.2 | Research answer dropped if roleplayer fails           | Low      | Resolved | `src/RAGBot.cpp` (sequential flow)       |
-| 4.1 | Magic config keys, no central schema                  | Low      | Open     | `main.cpp` + every asset constructor     |
-| 4.2 | `basePath` / `remotePath` undocumented aliasing       | Low      | Open     | `GeneratorIP.cpp:32-33`, `RerankGeneratorIP.cpp:29-30` |
+| 4.1 | Magic config keys, no central schema                  | Low      | Resolved | `src/ConfigKeys.h` — 28 `QLatin1String` constants       |
+| 4.2 | `basePath` / `remotePath` undocumented aliasing       | Low      | Resolved | `qWarning()` deprecation warning added to both generators |
 | 4.3 | `processQuestion` mixes pipeline + threading plumbing | Low      | Resolved | commit `b96c80e`                         |
 | 4.4 | Inconsistent disable-on-failure policy                | Low      | Resolved | `Researcher.cpp`, `Roleplayer.cpp` constructors      |
