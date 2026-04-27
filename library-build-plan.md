@@ -25,7 +25,7 @@ These are the things most likely to bite us; surface them in design before code.
 
 ---
 
-## Phase 1 — Restructure for two build outputs
+## Phase 1 — Restructure for two build outputs ✅ DONE
 
 Split the project so `main.cpp` is the only thing unique to the executable.
 
@@ -49,9 +49,15 @@ Add `b-lib.sh` mirroring `b-clean.sh` but invoking `qmake CONFIG+="library embed
 
 ### Acceptance for Phase 1
 
-- `./b.sh` still produces the existing console binary.
-- `./b-lib.sh` produces `libragbot.a` (or `.so`) and a header set in `../build-ragbot/`.
+- `./b.sh` still produces the existing console binary. ✅
+- `./b-lib.sh` produces `libragbot.a` in `../build-ragbot-lib/`. ✅
 - A trivial test driver (Phase 5) links it and constructs the pipeline.
+
+### What was done
+
+- Added `library {}` scope to the bottom of `ragbot.pro`: sets `TEMPLATE = lib`, `CONFIG += staticlib`, removes `console` and `src/main.cpp`. Zero impact on the default build.
+- Created `b-lib.sh` targeting `../build-ragbot-lib/`, invoking `qmake CONFIG+="library embedded_inference"`.
+- Verified: `libragbot.a` builds cleanly (network-only mode), regular console binary unchanged.
 
 ---
 
