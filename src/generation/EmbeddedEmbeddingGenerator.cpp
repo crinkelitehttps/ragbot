@@ -2,6 +2,7 @@
 #include <QDebug>
 #include "llama.h"
 #include "common.h"
+#include "../ConfigKeys.h"
 
 static void initLlamaBackend()
 {
@@ -22,7 +23,7 @@ EmbeddedEmbeddingGenerator::EmbeddedEmbeddingGenerator(const QJsonObject& config
             qCritical() << "llama.cpp:" << text;
     }, nullptr);
 
-    const QString modelPath = config.value("modelPath").toString();
+    const QString modelPath = config.value(ConfigKeys::ModelPath).toString();
     if (modelPath.isEmpty()) {
         qCritical() << "EmbeddedEmbeddingGenerator: no modelPath in config";
         return;

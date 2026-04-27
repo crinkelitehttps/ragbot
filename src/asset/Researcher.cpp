@@ -1,5 +1,6 @@
 #include "Researcher.h"
 #include "../generation/GeneratorFactory.h"
+#include "../ConfigKeys.h"
 #include <QFileInfo>
 #include <QTextStream>
 #include <QDebug>
@@ -7,8 +8,8 @@
 
 //--------------------------------------------------------------------------------
 Researcher::Researcher(const QJsonObject& config)
-    : m_generator(GeneratorFactory::createText(config.value("generator").toObject()))
-    , m_instruction(config.value("instruction").toString(
+    : m_generator(GeneratorFactory::createText(config.value(ConfigKeys::Generator).toObject()))
+    , m_instruction(config.value(ConfigKeys::Instruction).toString(
           "You are a helpful assistant. Answer the question using only the provided context."))
 {
     if (!m_generator || !m_generator->isValid()) {

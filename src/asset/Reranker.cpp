@@ -1,17 +1,18 @@
 #include "Reranker.h"
 #include "../generation/GeneratorFactory.h"
+#include "../ConfigKeys.h"
 #include <algorithm>
 #include <QDebug>
 
 
 //--------------------------------------------------------------------------------
 Reranker::Reranker(const QJsonObject& config)
-    : m_topN(config.value("topN").toInt(5))
-    , m_enabled(config.value("enabled").toBool(false))
+    : m_topN(config.value(ConfigKeys::TopN).toInt(5))
+    , m_enabled(config.value(ConfigKeys::Enabled).toBool(false))
 {
     if (!m_enabled) return;
 
-    m_generator = GeneratorFactory::createRerank(config.value("generator").toObject());
+    m_generator = GeneratorFactory::createRerank(config.value(ConfigKeys::Generator).toObject());
     if (!m_generator || !m_generator->isValid()) {
         qWarning() << "Reranker: generator failed to initialise — disabling";
         m_enabled = false;

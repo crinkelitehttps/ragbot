@@ -6,6 +6,7 @@
 #include "EmbeddedTextGenerator.h"
 #include "EmbeddedRerankGenerator.h"
 #endif
+#include "../ConfigKeys.h"
 #include <QDebug>
 
 
@@ -13,9 +14,9 @@
 auto GeneratorFactory::createEmbedding(const QJsonObject& config)
     -> std::unique_ptr<EmbeddingGenerator>
 {
-    const QString backend = config.value("backend").toString();
+    const QString backend = config.value(ConfigKeys::Backend).toString();
 
-    if (backend == "embedded") {
+    if (backend == ConfigKeys::BackendEmbedded) {
 #ifdef RAGBOT_EMBEDDED_INFERENCE
         return std::make_unique<EmbeddedEmbeddingGenerator>(config);
 #else
@@ -25,7 +26,7 @@ auto GeneratorFactory::createEmbedding(const QJsonObject& config)
 #endif
     }
 
-    if (backend == "network" || backend.isEmpty()) {
+    if (backend == ConfigKeys::BackendNetwork || backend.isEmpty()) {
         return std::make_unique<GeneratorIP>(config);
     }
 
@@ -38,9 +39,9 @@ auto GeneratorFactory::createEmbedding(const QJsonObject& config)
 auto GeneratorFactory::createText(const QJsonObject& config)
     -> std::unique_ptr<TextGenerator>
 {
-    const QString backend = config.value("backend").toString();
+    const QString backend = config.value(ConfigKeys::Backend).toString();
 
-    if (backend == "embedded") {
+    if (backend == ConfigKeys::BackendEmbedded) {
 #ifdef RAGBOT_EMBEDDED_INFERENCE
         return std::make_unique<EmbeddedTextGenerator>(config);
 #else
@@ -50,7 +51,7 @@ auto GeneratorFactory::createText(const QJsonObject& config)
 #endif
     }
 
-    if (backend == "network" || backend.isEmpty()) {
+    if (backend == ConfigKeys::BackendNetwork || backend.isEmpty()) {
         return std::make_unique<GeneratorIP>(config);
     }
 
@@ -63,9 +64,9 @@ auto GeneratorFactory::createText(const QJsonObject& config)
 auto GeneratorFactory::createRerank(const QJsonObject& config)
     -> std::unique_ptr<RerankGenerator>
 {
-    const QString backend = config.value("backend").toString();
+    const QString backend = config.value(ConfigKeys::Backend).toString();
 
-    if (backend == "embedded") {
+    if (backend == ConfigKeys::BackendEmbedded) {
 #ifdef RAGBOT_EMBEDDED_INFERENCE
         return std::make_unique<EmbeddedRerankGenerator>(config);
 #else
@@ -75,7 +76,7 @@ auto GeneratorFactory::createRerank(const QJsonObject& config)
 #endif
     }
 
-    if (backend == "network" || backend.isEmpty()) {
+    if (backend == ConfigKeys::BackendNetwork || backend.isEmpty()) {
         return std::make_unique<RerankGeneratorIP>(config);
     }
 

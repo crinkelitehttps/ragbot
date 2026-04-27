@@ -1,4 +1,5 @@
 #include "EmbeddingDatabase.h"
+#include "../ConfigKeys.h"
 #include <cmath>
 #include <cstring>
 #include <QDebug>
@@ -20,7 +21,7 @@ EmbeddingDatabase::EmbeddingDatabase(const QJsonObject& embedConfig)
     : m_index(Dimensions)
 {
     // "name" is optional; default to embeddings.db in the working directory.
-    const QString dbName = embedConfig.value("name").toString("embeddings.db");
+    const QString dbName = embedConfig.value(ConfigKeys::DbName).toString("embeddings.db");
     initialize(dbName);
 }
 

@@ -23,6 +23,7 @@ SOURCES += \
     src/parsers/ParserJSON.cpp
 
 HEADERS += \
+    src/ConfigKeys.h \
     src/ConversationTurn.h \
     src/RAGBot.h \
     src/asset/Embedder.h \

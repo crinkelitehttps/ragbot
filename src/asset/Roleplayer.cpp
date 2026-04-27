@@ -1,5 +1,6 @@
 #include "Roleplayer.h"
 #include "../generation/GeneratorFactory.h"
+#include "../ConfigKeys.h"
 #include <QFile>
 #include <QTextStream>
 #include <QDebug>
@@ -7,9 +8,9 @@
 
 //--------------------------------------------------------------------------------
 Roleplayer::Roleplayer(const QJsonObject& config)
-    : m_generator(GeneratorFactory::createText(config.value("generator").toObject()))
-    , m_characterName(config.value("characterName").toString("Survivor"))
-    , m_characterBackground(config.value("characterBackground").toString())
+    : m_generator(GeneratorFactory::createText(config.value(ConfigKeys::Generator).toObject()))
+    , m_characterName(config.value(ConfigKeys::CharacterName).toString("Survivor"))
+    , m_characterBackground(config.value(ConfigKeys::CharacterBackground).toString())
 {
     if (!m_generator || !m_generator->isValid()) {
         qWarning() << "Roleplayer: generator failed to initialise — disabled";

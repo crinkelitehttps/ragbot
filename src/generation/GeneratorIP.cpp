@@ -7,6 +7,7 @@
 #include <QTextStream>
 #include <QDebug>
 #include "GeneratorIP.h"
+#include "../ConfigKeys.h"
 
 
 //--------------------------------------------------------------------------------
@@ -27,14 +28,21 @@ auto GeneratorIP::runLoop(QNetworkReply* reply) -> bool
 
 //--------------------------------------------------------------------------------
 GeneratorIP::GeneratorIP(const QJsonObject& config)
-    : m_basePath(config.value("basePath").toString(
-          config.value("remotePath").toString()))
-    , m_modelName(config.value("modelName").toString())
-    , m_timeout(config.value("timeout").toInt(DefaultTimeout))
-    , m_isValid(!m_basePath.isEmpty())
+    : m_modelName(config.value(ConfigKeys::ModelName).toString())
+    , m_timeout(config.value(ConfigKeys::Timeout).toInt(DefaultTimeout))
+    , m_isValid(false)
 {
+    m_basePath = config.value(ConfigKeys::BasePath).toString();
+    if (m_basePath.isEmpty()) {
+        const QString legacy = config.value(ConfigKeys::RemotePath).toString();
+        if (!legacy.isEmpty()) {
+            qWarning() << "GeneratorIP: 'remotePath' is deprecated — use 'basePath'";
+            m_basePath = legacy;
+        }
+    }
+    m_isValid = !m_basePath.isEmpty();
     if (!m_isValid)
-        qWarning() << "GeneratorIP: no basePath/remotePath in config — disabled";
+        qWarning() << "GeneratorIP: no basePath in config — disabled";
 }
 
 

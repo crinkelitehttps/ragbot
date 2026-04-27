@@ -1,5 +1,4 @@
 {
-  "enableRoleplay": true,
   "reranker": {
     "enabled": false,
     "topN": 5,
@@ -32,6 +31,7 @@
     }
   },
   "roleplayer": {
+    "enabled": true,
     "characterName": "Survivor",
     "characterBackground": "You are a survivor in a post-apocalyptic world overrun by zombies. You speak from direct experience — gritty, practical, and occasionally darkly humorous. Never break character.",
     "generator": {

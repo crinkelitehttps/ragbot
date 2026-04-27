@@ -11,6 +11,7 @@
 #include "asset/Reranker.h"
 #include "db/RoleplayDatabase.h"
 #include "RAGBot.h"
+#include "ConfigKeys.h"
 
 auto main(int argc, char *argv[]) -> int
 {
@@ -76,19 +77,19 @@ auto main(int argc, char *argv[]) -> int
 
     // Apply command-line overrides on top of the config file values.
     {
-        QJsonObject embedderConfig = root.value("embedder").toObject();
+        QJsonObject embedderConfig = root.value(ConfigKeys::Embedder).toObject();
         if (cli.isSet(dataOpt)) {
-            embedderConfig["files"] = cli.value(dataOpt);
+            embedderConfig[ConfigKeys::Files] = cli.value(dataOpt);
             qDebug() << "main: data directory overridden to" << cli.value(dataOpt);
         }
         if (cli.isSet(dbOpt)) {
-            embedderConfig["name"] = cli.value(dbOpt);
+            embedderConfig[ConfigKeys::DbName] = cli.value(dbOpt);
             qDebug() << "main: database path overridden to" << cli.value(dbOpt);
         }
         if (cli.isSet(skipIndexOpt)) {
-            embedderConfig["skipIndex"] = true;
+            embedderConfig[ConfigKeys::SkipIndex] = true;
         }
-        root["embedder"] = embedderConfig;
+        root[ConfigKeys::Embedder] = embedderConfig;
     }
 
     const bool loadOnly = cli.isSet(loadOpt);
@@ -96,7 +97,7 @@ auto main(int argc, char *argv[]) -> int
     // All heavy objects (and their QNetworkAccessManagers) live on the worker thread.
     // The main thread runs app.exec() unblocked; the worker blocks on stdin between turns.
     QThread* worker = QThread::create([root, loadOnly]() {
-        Embedder embedder(root.value("embedder").toObject());
+        Embedder embedder(root.value(ConfigKeys::Embedder).toObject());
         if (!embedder.isValid()) {
             qWarning() << "main: failed to construct embedder";
             QCoreApplication::exit(1);
@@ -110,19 +111,19 @@ auto main(int argc, char *argv[]) -> int
             return;
         }
 
-        Reranker reranker(root.value("reranker").toObject());
+        Reranker reranker(root.value(ConfigKeys::Reranker).toObject());
         qDebug() << "main: reranker ready (enabled:" << reranker.isEnabled() << ")";
 
-        Researcher researcher(root.value("researcher").toObject());
+        Researcher researcher(root.value(ConfigKeys::Researcher).toObject());
         qDebug() << "main: researcher ready";
 
-        Roleplayer roleplayer(root.value("roleplayer").toObject());
+        Roleplayer roleplayer(root.value(ConfigKeys::Roleplayer).toObject());
         qDebug() << "main: roleplayer ready";
 
-        RoleplayDatabase roleplayDb(root.value("conversationsDb").toString("conversations.db"));
+        RoleplayDatabase roleplayDb(root.value(ConfigKeys::ConversationsDb).toString("conversations.db"));
         qDebug() << "main: roleplay database ready";
 
-        const bool enableRoleplay = root.value("enableRoleplay").toBool(false);
+        const bool enableRoleplay = root.value(ConfigKeys::Roleplayer).toObject().value(ConfigKeys::Enabled).toBool(false);
         RAGBot ragbot(embedder, reranker, researcher, roleplayer, roleplayDb, enableRoleplay);
         ragbot.start();
     });

@@ -3,6 +3,7 @@
 #include <QTextStream>
 #include "llama.h"
 #include "common.h"
+#include "../ConfigKeys.h"
 
 static void initLlamaBackend()
 {
@@ -23,13 +24,13 @@ EmbeddedTextGenerator::EmbeddedTextGenerator(const QJsonObject& config)
             qCritical() << "llama.cpp:" << text;
     }, nullptr);
 
-    m_temperature   = static_cast<float>(config.value("temperature"  ).toDouble(DefaultTemperature));
-    m_topP          = static_cast<float>(config.value("topP"         ).toDouble(DefaultTopP));
-    m_repeatPenalty = static_cast<float>(config.value("repeatPenalty").toDouble(DefaultRepeatPenalty));
-    m_maxTokenGen   = config.value("maxTokens"     ).toInt(DefaultMaxTokenGen);
-    m_enableThinking = config.value("enableThinking").toBool(false);
+    m_temperature    = static_cast<float>(config.value(ConfigKeys::Temperature  ).toDouble(DefaultTemperature));
+    m_topP           = static_cast<float>(config.value(ConfigKeys::TopP         ).toDouble(DefaultTopP));
+    m_repeatPenalty  = static_cast<float>(config.value(ConfigKeys::RepeatPenalty).toDouble(DefaultRepeatPenalty));
+    m_maxTokenGen    = config.value(ConfigKeys::MaxTokens    ).toInt(DefaultMaxTokenGen);
+    m_enableThinking = config.value(ConfigKeys::EnableThinking).toBool(false);
 
-    const QString modelPath = config.value("modelPath").toString();
+    const QString modelPath = config.value(ConfigKeys::ModelPath).toString();
     if (modelPath.isEmpty()) {
         qCritical() << "EmbeddedTextGenerator: no modelPath in config";
         return;

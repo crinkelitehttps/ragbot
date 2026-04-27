@@ -9,17 +9,18 @@
 #include "../generation/GeneratorFactory.h"
 #include "../parsers/ParserJSON.h"
 #include "../parsers/ManPageResolver.h"
+#include "../ConfigKeys.h"
 
 
 //--------------------------------------------------------------------------------
 Embedder::Embedder(const QJsonObject& config)
     : m_db(config)
-    , m_generator(GeneratorFactory::createEmbedding(config.value("generator").toObject()))
-    , m_parserType(config.value("parserType").toString("cdda_json"))
-    , m_topK(config.value("topK").toInt(10))
-    , m_similarityThreshold(static_cast<float>(config.value("similarityThreshold").toDouble(0.0)))
+    , m_generator(GeneratorFactory::createEmbedding(config.value(ConfigKeys::Generator).toObject()))
+    , m_parserType(config.value(ConfigKeys::ParserType).toString(ConfigKeys::ParserCddaJson))
+    , m_topK(config.value(ConfigKeys::TopK).toInt(10))
+    , m_similarityThreshold(static_cast<float>(config.value(ConfigKeys::SimilarityThreshold).toDouble(0.0)))
 {
-    const QJsonValue filesVal = config.value("files");
+    const QJsonValue filesVal = config.value(ConfigKeys::Files);
     if (filesVal.isArray()) {
         for (const QJsonValue& v : filesVal.toArray())
             m_files << v.toString();
@@ -38,10 +39,10 @@ Embedder::Embedder(const QJsonObject& config)
 
     m_isValid = true;
 
-    if (config.value("skipIndex").toBool(false)) {
+    if (config.value(ConfigKeys::SkipIndex).toBool(false)) {
         qDebug() << "Embedder: skipping index pass (-s flag)";
     } else {
-        if (m_parserType == "cdda_json")
+        if (m_parserType == ConfigKeys::ParserCddaJson)
             m_parser = std::make_unique<ParserJSON>();
         processAllFiles();
     }
@@ -53,7 +54,7 @@ void Embedder::processAllFiles()
 {
     QStringList paths;
 
-    if (m_parserType == "man_page") {
+    if (m_parserType == ConfigKeys::ParserManPage) {
         paths = ManPageResolver::discover(m_files);
         qDebug() << "Embedder::processAllFiles():" << paths.size()
                  << "man page files across" << m_files.size() << "directories";
@@ -79,7 +80,7 @@ void Embedder::processAllFiles()
     for (const QString& path : paths) {
         qDebug() << QString("[%1/%2] %3").arg(++n).arg(total)
                                          .arg(QFileInfo(path).fileName());
-        if (m_parserType == "man_page") {
+        if (m_parserType == ConfigKeys::ParserManPage) {
             if (fileEmbedManPage(path)) ++indexed; else ++skipped;
         } else {
             QFile file(path);

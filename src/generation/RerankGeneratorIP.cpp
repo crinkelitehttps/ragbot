@@ -6,6 +6,7 @@
 #include <QTimer>
 #include <QEventLoop>
 #include <QDebug>
+#include "../ConfigKeys.h"
 
 
 //--------------------------------------------------------------------------------
@@ -26,12 +27,19 @@ auto RerankGeneratorIP::runLoop(QNetworkReply* reply) -> bool
 
 //--------------------------------------------------------------------------------
 RerankGeneratorIP::RerankGeneratorIP(const QJsonObject& config)
-    : m_basePath(config.value("basePath").toString(
-          config.value("remotePath").toString()))
-    , m_modelName(config.value("modelName").toString())
-    , m_timeout(config.value("timeout").toInt(DefaultTimeout))
-    , m_isValid(!m_basePath.isEmpty())
+    : m_modelName(config.value(ConfigKeys::ModelName).toString())
+    , m_timeout(config.value(ConfigKeys::Timeout).toInt(DefaultTimeout))
+    , m_isValid(false)
 {
+    m_basePath = config.value(ConfigKeys::BasePath).toString();
+    if (m_basePath.isEmpty()) {
+        const QString legacy = config.value(ConfigKeys::RemotePath).toString();
+        if (!legacy.isEmpty()) {
+            qWarning() << "RerankGeneratorIP: 'remotePath' is deprecated — use 'basePath'";
+            m_basePath = legacy;
+        }
+    }
+    m_isValid = !m_basePath.isEmpty();
     if (!m_isValid)
         qWarning() << "RerankGeneratorIP: no basePath in config — disabled";
 }

@@ -15,9 +15,9 @@
 - [x] A. Man page parser — `ManPageResolver` + `parserType: "man_page"` config key in embedder
 - [x] B. `enableRoleplay` config key — Roleplayer off by default; set `"enableRoleplay": true` at the **root** of config.json (not nested inside `researcher` or `roleplayer`)
 - [x] C. Streaming output from Researcher directly to console while Roleplayer waits (pipeline parallelism)
-- [ ] E. Inconsistent enable/disable convention — `enableRoleplay` is a root-level boolean (`main.cpp:125`) while `reranker.enabled` is nested. Pick one; nested is more scalable.
-- [ ] F. `basePath` / `remotePath` silent aliasing in `GeneratorIP.cpp:32-33` and `RerankGeneratorIP.cpp:29-30` — the legacy key has no deprecation warning and isn't documented. Pick a canonical key and log or remove the fallback.
+- [x] E. Inconsistent enable/disable convention — `enableRoleplay` is a root-level boolean (`main.cpp:125`) while `reranker.enabled` is nested. Pick one; nested is more scalable.
+- [x] F. `basePath` / `remotePath` silent aliasing in `GeneratorIP.cpp:32-33` and `RerankGeneratorIP.cpp:29-30` — the legacy key has no deprecation warning and isn't documented. Pick a canonical key and log or remove the fallback.
 - [x] G. Inconsistent disable-on-failure policy — `Reranker` disables itself on init failure (`Reranker.cpp:15-19`); `Researcher` and `Roleplayer` carry an invalid generator and refuse work per call (`Researcher.cpp:23`, `Roleplayer.cpp:23`). Standardise on the reranker's pattern.
-- [ ] H. Magic config keys scattered across files — no central list; renaming a key requires a multi-file grep. Add a `ConfigKeys.h` with `inline constexpr` string constants.
+- [x] H. Magic config keys scattered across files — no central list; renaming a key requires a multi-file grep. Add a `ConfigKeys.h` with `inline constexpr` string constants.
 
 - [x] D. Re-ranker — `Reranker` class in `src/asset/`; `EmbeddedRerankGenerator` (llama.cpp `LLAMA_POOLING_TYPE_RANK`) and `RerankGeneratorIP` (Cohere `/v1/rerank`); sits between Embedder search and Researcher; controlled by `reranker.enabled` + `reranker.topN` in config.json. **Awaiting model path** — set `reranker.generator.modelPath` and flip `"enabled": true` to activate.
