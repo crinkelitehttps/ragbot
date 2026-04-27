@@ -30,12 +30,17 @@ auto Researcher::research(
     for (int i = 0; i < results.size(); ++i) {
         const auto& r = results[i];
         const QString fileName = QFileInfo(r.sourceFile).fileName();
-        qDebug().noquote() << QString("  [%1] %2  sim=%3  %4 chars")
-            .arg(i).arg(fileName, -40)
-            .arg(r.similarity, 0, 'f', 4).arg(r.content.size());
+        const bool reranked = r.rerankScore >= 0.0f;
+        QString debugScore = QString("sim=%1").arg(r.similarity, 0, 'f', 4);
+        if (reranked)
+            debugScore += QString("  rerank=%1").arg(r.rerankScore, 0, 'f', 4);
+        qDebug().noquote() << QString("  [%1] %2  %3  %4 chars")
+            .arg(i).arg(fileName, -40).arg(debugScore).arg(r.content.size());
         qDebug().noquote() << "       " + r.content.left(120).replace('\n', ' ');
-        context += QString("[%1, similarity: %2]\n%3\n\n")
-            .arg(fileName).arg(r.similarity, 0, 'f', 3).arg(r.content);
+        const QString scoreLabel = reranked ? "relevance" : "similarity";
+        const float   scoreValue = reranked ? r.rerankScore : r.similarity;
+        context += QString("[%1, %2: %3]\n%4\n\n")
+            .arg(fileName).arg(scoreLabel).arg(scoreValue, 0, 'f', 3).arg(r.content);
     }
     qDebug() << "Researcher::research(): total context" << context.size() << "chars";
 

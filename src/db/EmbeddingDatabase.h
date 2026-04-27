@@ -14,6 +14,7 @@ public:
         QString sourceFile;
         QString content;
         float   similarity;
+        float   rerankScore { -1.0f }; // set by Reranker; negative means not reranked
     };
 
     explicit EmbeddingDatabase(const QJsonObject& embedConfig);
