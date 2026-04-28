@@ -1,12 +1,14 @@
-export CODE_DIR=$(pwd)
-cd ../build-ragbot/
-echo "running make clean"
-make clean
+#!/usr/bin/env bash
+# Full clean rebuild — Qt mode, embedded_inference (links llama.cpp).
+# Also regenerates compile_commands.json (CMake exports it natively).
+# Output: ../build-ragbot/ragbot
+set -euo pipefail
 
-echo "running qmake"
-qmake CONFIG+=embedded_inference ../ragbot 
+SOURCE_DIR=$(pwd)
+BUILD_DIR="$SOURCE_DIR/../build-ragbot"
 
-echo "running make"
-
-bear -- make -j$(nproc)
-cd $CODE_DIR
+rm -rf "$BUILD_DIR"
+cmake -B "$BUILD_DIR" -S "$SOURCE_DIR" \
+    -DRAGBOT_USE_QT=ON \
+    -DRAGBOT_EMBEDDED_INFERENCE=ON
+cmake --build "$BUILD_DIR" -j"$(nproc)"
