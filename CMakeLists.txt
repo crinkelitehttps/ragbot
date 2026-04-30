@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ragbot LANGUAGES CXX)
+project(ragbot LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -184,3 +184,17 @@ if(RAGBOT_USE_QT)
 else()
     target_link_libraries(compat_smoke PRIVATE nlohmann_json::nlohmann_json CURL::libcurl)
 endif()
+
+# ---------------------------------------------------------------------------
+# ragbot_smoke_c — Phase 5 C ABI smoke test. Compiled as pure C to prove
+# ragbot_c_api.h is a valid C header and libragbot.a links from a C TU.
+# LINKER_LANGUAGE CXX is required so the C++ runtime is brought in by the
+# linker even though all source files here are plain C.
+# ---------------------------------------------------------------------------
+add_executable(ragbot_smoke_c tests/lib_smoke_c.c)
+target_include_directories(ragbot_smoke_c PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(ragbot_smoke_c PRIVATE ragbot)
+set_target_properties(ragbot_smoke_c PROPERTIES
+    C_STANDARD   11
+    LINKER_LANGUAGE CXX
+)
