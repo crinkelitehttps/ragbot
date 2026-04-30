@@ -2,21 +2,20 @@
 #define TEXTGENERATOR_H
 
 #include <functional>
-#include <QString>
-#include <QStringView>
+#include "../compat/Types.h"
 
 class TextGenerator
 {
 public:
-    using TokenSink = std::function<void(QStringView)>;
+    using TokenSink = std::function<void(rb::StringView)>;
 
     virtual ~TextGenerator() = default;
     virtual auto generateText(
-        const QString& systemPrompt,
+        const rb::String& systemPrompt,
         bool isStream,
-        const QString& prompt,
+        const rb::String& prompt,
         const TokenSink& tokenSink = {}
-    ) -> QString = 0;
+    ) -> rb::String = 0;
     [[nodiscard]] virtual auto isValid() const -> bool = 0;
 
 protected:

@@ -1,184 +1,177 @@
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QTimer>
-#include <QEventLoop>
-#include <QNetworkReply>
-#include <QTextStream>
-#include <QDebug>
 #include "GeneratorIP.h"
+#include "../compat/Logging.h"
+#include "../compat/Strings.h"
 #include "../ConfigKeys.h"
+#include <cstdio>
+#include <string_view>
 
 
-//--------------------------------------------------------------------------------
-auto GeneratorIP::runLoop(QNetworkReply* reply) -> bool
-{
-    QEventLoop loop;
-    QTimer timer;
-    timer.setSingleShot(true);
-    QObject::connect(reply,  &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timer, &QTimer::timeout,         &loop, &QEventLoop::quit);
-    timer.start(m_timeout);
-    loop.exec();
-    if (timer.isActive()) { timer.stop(); return true; }
-    reply->abort();
-    return false;
-}
-
-
-//--------------------------------------------------------------------------------
-GeneratorIP::GeneratorIP(const QJsonObject& config)
-    : m_modelName(config.value(ConfigKeys::ModelName).toString())
-    , m_timeout(config.value(ConfigKeys::Timeout).toInt(DefaultTimeout))
+GeneratorIP::GeneratorIP(const rb::Json& config)
+    : m_modelName(config.stringValue(ConfigKeys::ModelName))
+    , m_timeout(config.intValue(ConfigKeys::Timeout, DefaultTimeout))
     , m_isValid(false)
 {
-    m_basePath = config.value(ConfigKeys::BasePath).toString();
-    if (m_basePath.isEmpty()) {
-        const QString legacy = config.value(ConfigKeys::RemotePath).toString();
-        if (!legacy.isEmpty()) {
-            qWarning() << "GeneratorIP: 'remotePath' is deprecated — use 'basePath'";
+    m_basePath = config.stringValue(ConfigKeys::BasePath);
+    if (rb::str_empty(m_basePath)) {
+        const rb::String legacy = config.stringValue(ConfigKeys::RemotePath);
+        if (!rb::str_empty(legacy)) {
+            RAGBOT_LOG_WARN("GeneratorIP: 'remotePath' is deprecated — use 'basePath'");
             m_basePath = legacy;
         }
     }
-    m_isValid = !m_basePath.isEmpty();
+    m_isValid = !rb::str_empty(m_basePath);
     if (!m_isValid)
-        qWarning() << "GeneratorIP: no basePath in config — disabled";
+        RAGBOT_LOG_WARN("GeneratorIP: no basePath in config — disabled");
 }
 
 
-//--------------------------------------------------------------------------------
-auto GeneratorIP::parseEmbeddingResponse(const QByteArray& data) -> QVector<float>
+auto GeneratorIP::parseEmbeddingResponse(const rb::Bytes& data) -> rb::Vector<float>
 {
-    const QJsonDocument doc = QJsonDocument::fromJson(data);
-    if (doc.isNull()) return {};
+    const rb::Json doc = rb::Json::parse(data);
+    if (!doc.isValid()) return {};
 
-    const QJsonArray dataArr = doc.object()["data"].toArray();
-    if (dataArr.isEmpty()) {
-        qWarning() << "GeneratorIP::parseEmbeddingResponse(): empty data array";
+    const rb::Json dataArr = doc.value("data");
+    if (!dataArr.isArray() || dataArr.size() == 0) {
+        RAGBOT_LOG_WARN("GeneratorIP::parseEmbeddingResponse(): empty data array");
         return {};
     }
-    const QJsonArray embArray = dataArr.at(0).toObject()["embedding"].toArray();
+    const rb::Json embArray = dataArr.at(0).value("embedding");
+    if (!embArray.isArray()) return {};
 
-    QVector<float> result;
+    rb::Vector<float> result;
     result.reserve(embArray.size());
-    for (const auto& v : embArray) result.append(static_cast<float>(v.toDouble()));
+    for (const auto& v : embArray.items())
+        result.push_back(static_cast<float>(v.toDouble()));
     return result;
 }
 
 
-//--------------------------------------------------------------------------------
-auto GeneratorIP::generate(const QString& data) -> QVector<float>
+auto GeneratorIP::generate(const rb::String& data) -> rb::Vector<float>
 {
     if (!m_isValid) return {};
 
-    QNetworkRequest req(QUrl(m_basePath + "v1/embeddings"));
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setTransferTimeout(m_timeout);
+    rb::Json body = rb::Json::object();
+    body.setString("input", data);
+    body.setString("model", m_modelName);
 
-    const QJsonObject body{{"input", data}, {"model", m_modelName}};
-    QNetworkReply* reply = m_network.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
+    const rb::HttpClient::HeaderList headers {
+        { rb::from_std("Content-Type"), rb::from_std("application/json") }
+    };
+    const rb::Bytes bodyBytes = body.dump(true);
+    const rb::HttpClient::Response resp =
+        m_http.post(m_basePath + rb::from_std("v1/embeddings"), headers, bodyBytes);
 
-    QVector<float> result;
-    if (runLoop(reply)) {
-        if (reply->error() == QNetworkReply::NoError)
-            result = parseEmbeddingResponse(reply->readAll());
-        else
-            qWarning() << "GeneratorIP::generate() network error:" << reply->errorString();
-    } else {
-        qWarning() << "GeneratorIP::generate() timed out after" << m_timeout << "ms";
-    }
-    reply->deleteLater();
-    return result;
-}
-
-
-//--------------------------------------------------------------------------------
-auto GeneratorIP::parseStaticResponse(const QByteArray& data) -> QString
-{
-    const QJsonDocument doc = QJsonDocument::fromJson(data);
-    if (doc.isNull()) return {};
-
-    const QJsonArray choices = doc.object()["choices"].toArray();
-    if (choices.isEmpty()) {
-        qWarning() << "GeneratorIP::parseStaticResponse(): empty choices array";
+    if (!rb::str_empty(resp.error)) {
+        RAGBOT_LOG_WARN("GeneratorIP::generate() error: {}", rb::to_std(resp.error));
         return {};
     }
-    return choices.at(0).toObject()["message"].toObject()["content"].toString();
+    return parseEmbeddingResponse(resp.body);
 }
 
 
-//--------------------------------------------------------------------------------
-auto GeneratorIP::parseStreamChunk(const QByteArray& data) -> QString
+auto GeneratorIP::parseStaticResponse(const rb::Bytes& data) -> rb::String
 {
-    QString result;
-    for (const QString& line : QString(data).split('\n')) {
-        if (!line.startsWith(SseDataPrefix)) continue;
-        const QString json = line.mid(SseDataPrefix.size()).trimmed();
-        if (json == "[DONE]" || json.isEmpty()) continue;
+    const rb::Json doc = rb::Json::parse(data);
+    if (!doc.isValid()) return {};
 
-        const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
-        if (doc.isNull()) continue;
+    const rb::Json choices = doc.value("choices");
+    if (!choices.isArray() || choices.size() == 0) {
+        RAGBOT_LOG_WARN("GeneratorIP::parseStaticResponse(): empty choices array");
+        return {};
+    }
+    return choices.at(0).value("message").stringValue("content");
+}
 
-        const QJsonArray choices = doc.object()["choices"].toArray();
-        if (choices.isEmpty()) continue;
-        const QJsonObject delta = choices.at(0).toObject()["delta"].toObject();
-        if (delta.contains("content")) result += delta["content"].toString();
+
+auto GeneratorIP::parseStreamChunk(std::string_view data) -> rb::String
+{
+    rb::String result;
+    size_t pos = 0;
+    while (pos < data.size()) {
+        const size_t nl = data.find('\n', pos);
+        const std::string_view line = (nl == std::string_view::npos)
+            ? data.substr(pos)
+            : data.substr(pos, nl - pos);
+        pos = (nl == std::string_view::npos) ? data.size() : nl + 1;
+
+        const std::string_view prefix = "data: ";
+        if (line.substr(0, prefix.size()) != prefix) continue;
+        const std::string_view json = line.substr(prefix.size());
+        if (json == "[DONE]" || json.empty()) continue;
+
+        const rb::Json doc = rb::Json::parse(json);
+        if (!doc.isValid()) continue;
+
+        const rb::Json choices = doc.value("choices");
+        if (!choices.isArray() || choices.size() == 0) continue;
+        const rb::Json delta = choices.at(0).value("delta");
+        if (delta.contains("content"))
+            result += delta.stringValue("content");
     }
     return result;
 }
 
 
-//--------------------------------------------------------------------------------
 auto GeneratorIP::generateText(
-        const QString& systemPrompt,
+        const rb::String& systemPrompt,
         bool isStream,
-        const QString& prompt,
+        const rb::String& prompt,
         const TokenSink& tokenSink
-) -> QString
+) -> rb::String
 {
     if (!m_isValid) return {};
 
-    QJsonArray messages;
-    if (!systemPrompt.isEmpty())
-        messages.append(QJsonObject{{"role", "system"}, {"content", systemPrompt}});
-    messages.append(QJsonObject{{"role", "user"}, {"content", prompt}});
+    rb::Json messages = rb::Json::array();
+    if (!rb::str_empty(systemPrompt)) {
+        rb::Json sys = rb::Json::object();
+        sys.setString("role", "system");
+        sys.setString("content", systemPrompt);
+        messages.append(sys);
+    }
+    rb::Json user = rb::Json::object();
+    user.setString("role", "user");
+    user.setString("content", prompt);
+    messages.append(user);
 
-    const QJsonObject body{
-        {"model",       m_modelName},
-        {"stream",      isStream},
-        {"messages",    messages},
-        {"temperature", DefaultTemp},
-        {"max_tokens",  DefaultMaxTokens}
+    rb::Json body = rb::Json::object();
+    body.setString("model",   m_modelName);
+    body.setBool("stream",    isStream);
+    body.set("messages",      messages);
+    body.setDouble("temperature", TextGenerator::DefaultTemp);
+    body.setInt("max_tokens",     TextGenerator::DefaultMaxTokens);
+
+    const rb::HttpClient::HeaderList headers {
+        { rb::from_std("Content-Type"), rb::from_std("application/json") }
     };
+    const rb::Bytes bodyBytes = body.dump(true);
+    const rb::String endpoint = m_basePath + rb::from_std("v1/chat/completions");
 
-    QNetworkRequest req(QUrl(m_basePath + "v1/chat/completions"));
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setTransferTimeout(m_timeout);
+    if (!isStream) {
+        const rb::HttpClient::Response resp = m_http.post(endpoint, headers, bodyBytes);
+        if (!rb::str_empty(resp.error)) {
+            RAGBOT_LOG_WARN("GeneratorIP::generateText() error: {}", rb::to_std(resp.error));
+            return {};
+        }
+        return parseStaticResponse(resp.body);
+    }
 
-    QNetworkReply* reply = m_network.post(req, QJsonDocument(body).toJson());
-
-    QString streamed;
-    if (isStream) {
-        QObject::connect(reply, &QNetworkReply::readyRead, [&]() {
-            const QString chunk = parseStreamChunk(reply->readAll());
-            streamed += chunk;
+    // Streaming path
+    rb::String accumulated;
+    const rb::HttpClient::Response resp = m_http.postStreaming(
+        endpoint, headers, bodyBytes,
+        [&](std::string_view chunk) {
+            const rb::String parsed = parseStreamChunk(chunk);
+            accumulated += parsed;
             if (tokenSink)
-                tokenSink(QStringView(chunk));
-            else
-                QTextStream(stdout) << chunk << Qt::flush;
+                tokenSink(rb::StringView(parsed));
+            else {
+                std::fputs(rb::to_std(parsed).c_str(), stdout);
+                std::fflush(stdout);
+            }
         });
-    }
 
-    QString result;
-    if (runLoop(reply)) {
-        if (reply->error() == QNetworkReply::NoError)
-            result = isStream ? streamed : parseStaticResponse(reply->readAll());
-        else
-            qWarning() << "GeneratorIP::generateText() network error:" << reply->errorString();
-    } else {
-        qWarning() << "GeneratorIP::generateText() timed out after" << m_timeout << "ms";
-    }
-    QObject::disconnect(reply, &QNetworkReply::readyRead, nullptr, nullptr);
-    reply->deleteLater();
-    return result;
+    if (!rb::str_empty(resp.error))
+        RAGBOT_LOG_WARN("GeneratorIP::generateText() stream error: {}", rb::to_std(resp.error));
+
+    return accumulated;
 }

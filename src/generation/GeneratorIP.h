@@ -1,43 +1,40 @@
 #ifndef GENERATORIP_H
 #define GENERATORIP_H
 
-#include <QNetworkAccessManager>
+#include "../compat/Http.h"
+#include "../compat/Json.h"
 #include "EmbeddingGenerator.h"
 #include "TextGenerator.h"
 
-// Generator that calls an OpenAI-compatible HTTP server.
-// Implements both EmbeddingGenerator (/v1/embeddings) and TextGenerator (/v1/chat/completions).
 class GeneratorIP : public EmbeddingGenerator, public TextGenerator
 {
 public:
-    explicit GeneratorIP(const QJsonObject& config);
+    explicit GeneratorIP(const rb::Json& config);
 
-    [[nodiscard]] auto generate(const QString& data) -> QVector<float> override;
+    [[nodiscard]] auto generate(const rb::String& data) -> rb::Vector<float> override;
 
     auto generateText(
-        const QString& systemPrompt,
+        const rb::String& systemPrompt,
         bool isStream,
-        const QString& prompt,
+        const rb::String& prompt,
         const TokenSink& tokenSink = {}
-    ) -> QString override;
+    ) -> rb::String override;
 
     [[nodiscard]] auto isValid() const -> bool override { return m_isValid; }
 
-    [[nodiscard]] static auto parseStaticResponse(const QByteArray& data) -> QString;
-    [[nodiscard]] static auto parseStreamChunk(const QByteArray& data) -> QString;
+    [[nodiscard]] static auto parseStaticResponse(const rb::Bytes& data) -> rb::String;
+    [[nodiscard]] static auto parseStreamChunk(std::string_view data) -> rb::String;
 
 private:
-    [[nodiscard]] static auto parseEmbeddingResponse(const QByteArray& data) -> QVector<float>;
-    auto runLoop(QNetworkReply* reply) -> bool;
+    [[nodiscard]] static auto parseEmbeddingResponse(const rb::Bytes& data) -> rb::Vector<float>;
 
     static constexpr int DefaultTimeout { 240000 };
-    static inline const QString SseDataPrefix = "data: ";
 
-    QNetworkAccessManager m_network;
-    QString m_basePath;
-    QString m_modelName;
-    int     m_timeout;
-    bool    m_isValid;
+    rb::HttpClient m_http;
+    rb::String     m_basePath;
+    rb::String     m_modelName;
+    int            m_timeout;
+    bool           m_isValid;
 };
 
 #endif // GENERATORIP_H

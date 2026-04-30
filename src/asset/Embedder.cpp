@@ -1,46 +1,44 @@
-#include <QCryptographicHash>
-#include <QDir>
-#include <QDirIterator>
-#include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QDebug>
 #include "Embedder.h"
 #include "../generation/GeneratorFactory.h"
 #include "../parsers/ParserJSON.h"
-#include "../parsers/ManPageResolver.h"
 #include "../ConfigKeys.h"
+#include "../compat/Logging.h"
+#include "../compat/Strings.h"
+#include "../compat/Io.h"
+#include "../compat/Sha.h"
+#ifdef RAGBOT_USE_QT
+#include "../parsers/ManPageResolver.h"
+#endif
 
 
-//--------------------------------------------------------------------------------
-Embedder::Embedder(const QJsonObject& config)
+Embedder::Embedder(const rb::Json& config)
     : m_db(config)
-    , m_generator(GeneratorFactory::createEmbedding(config.value(ConfigKeys::Generator).toObject()))
-    , m_parserType(config.value(ConfigKeys::ParserType).toString(ConfigKeys::ParserCddaJson))
-    , m_topK(config.value(ConfigKeys::TopK).toInt(10))
-    , m_similarityThreshold(static_cast<float>(config.value(ConfigKeys::SimilarityThreshold).toDouble(0.0)))
+    , m_generator(GeneratorFactory::createEmbedding(config.value(ConfigKeys::Generator)))
+    , m_parserType(config.stringValue(ConfigKeys::ParserType, ConfigKeys::ParserCddaJson))
+    , m_topK(config.intValue(ConfigKeys::TopK, 10))
+    , m_similarityThreshold(static_cast<float>(config.doubleValue(ConfigKeys::SimilarityThreshold, 0.0)))
 {
-    const QJsonValue filesVal = config.value(ConfigKeys::Files);
+    const rb::Json filesVal = config.value(ConfigKeys::Files);
     if (filesVal.isArray()) {
-        for (const QJsonValue& v : filesVal.toArray())
-            m_files << v.toString();
+        for (const auto& v : filesVal.items())
+            m_files.push_back(v.toString());
     } else {
-        m_files << filesVal.toString();
+        m_files.push_back(filesVal.toString());
     }
 
     if (!m_db.isOpen()) {
-        qWarning() << "Embedder: database did not open";
+        RAGBOT_LOG_WARN("Embedder: database did not open");
         return;
     }
     if (!m_generator || !m_generator->isValid()) {
-        qWarning() << "Embedder: generator failed to initialise";
+        RAGBOT_LOG_WARN("Embedder: generator failed to initialise");
         return;
     }
 
     m_isValid = true;
 
-    if (config.value(ConfigKeys::SkipIndex).toBool(false)) {
-        qDebug() << "Embedder: skipping index pass (-s flag)";
+    if (config.boolValue(ConfigKeys::SkipIndex, false)) {
+        RAGBOT_LOG_INFO("Embedder: skipping index pass (-s flag)");
     } else {
         if (m_parserType == ConfigKeys::ParserCddaJson)
             m_parser = std::make_unique<ParserJSON>();
@@ -49,96 +47,101 @@ Embedder::Embedder(const QJsonObject& config)
 }
 
 
-//--------------------------------------------------------------------------------
 void Embedder::processAllFiles()
 {
-    QStringList paths;
+    rb::Vector<rb::String> paths;
 
+#ifdef RAGBOT_USE_QT
     if (m_parserType == ConfigKeys::ParserManPage) {
-        paths = ManPageResolver::discover(m_files);
-        qDebug() << "Embedder::processAllFiles():" << paths.size()
-                 << "man page files across" << m_files.size() << "directories";
-    } else {
-        for (const QString& dir : m_files) {
-            QDirIterator it(dir, {"*.json"}, QDir::Files, QDirIterator::Subdirectories);
-            while (it.hasNext())
-                paths << it.next();
+        QStringList qtFiles;
+        for (const auto& f : m_files) qtFiles << f;
+        const QStringList discovered = ManPageResolver::discover(qtFiles);
+        for (const auto& p : discovered) paths.push_back(p);
+        RAGBOT_LOG_INFO("Embedder::processAllFiles(): {} man page files across {} directories",
+                        static_cast<int>(paths.size()), static_cast<int>(m_files.size()));
+    } else
+#endif
+    {
+        for (const rb::String& dir : m_files) {
+            const auto dirPaths = rb::iter_files_recursive(dir, rb::from_std(".json"));
+            for (const auto& p : dirPaths) paths.push_back(p);
         }
-        qDebug() << "Embedder::processAllFiles():" << paths.size()
-                 << "JSON files across" << m_files.size() << "directories";
+        RAGBOT_LOG_INFO("Embedder::processAllFiles(): {} JSON files across {} directories",
+                        static_cast<int>(paths.size()), static_cast<int>(m_files.size()));
         m_registry = CDDAResolver::buildRegistryFromFiles(paths);
     }
 
-    const int total = paths.size();
+    const int total = static_cast<int>(paths.size());
 
     if (!m_db.beginBatch()) {
-        qWarning() << "Embedder::processAllFiles(): failed to begin batch transaction";
+        RAGBOT_LOG_WARN("Embedder::processAllFiles(): failed to begin batch transaction");
         return;
     }
 
     int indexed = 0, skipped = 0, n = 0;
-    for (const QString& path : paths) {
-        qDebug() << QString("[%1/%2] %3").arg(++n).arg(total)
-                                         .arg(QFileInfo(path).fileName());
+    for (const rb::String& path : paths) {
+        const rb::String fname = rb::path_filename(path);
+        RAGBOT_LOG_INFO("[{}/{}] {}", ++n, total, rb::to_std(fname));
+
+#ifdef RAGBOT_USE_QT
         if (m_parserType == ConfigKeys::ParserManPage) {
             if (fileEmbedManPage(path)) ++indexed; else ++skipped;
-        } else {
-            QFile file(path);
-            if (fileEmbed(file)) ++indexed; else ++skipped;
+        } else
+#endif
+        {
+            if (fileEmbed(path)) ++indexed; else ++skipped;
         }
     }
 
     if (!m_db.commitBatch()) {
-        qWarning() << "Embedder::processAllFiles(): batch commit failed — re-index required";
+        RAGBOT_LOG_WARN("Embedder::processAllFiles(): batch commit failed — re-index required");
         return;
     }
 
-    qDebug() << "Embedder::processAllFiles(): done —"
-             << indexed << "newly indexed," << skipped << "already up-to-date";
+    RAGBOT_LOG_INFO("Embedder::processAllFiles(): done — {} newly indexed, {} already up-to-date",
+                    indexed, skipped);
 }
 
 
-//--------------------------------------------------------------------------------
-auto Embedder::fileEmbed(QFile& file) -> bool
+auto Embedder::fileEmbed(const rb::String& path) -> bool
 {
-    if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "Embedder::fileEmbed(): cannot open" << file.fileName();
+    bool readOk = false;
+    const rb::Bytes fileData = rb::read_file_bytes(path, &readOk);
+    if (!readOk) {
+        RAGBOT_LOG_WARN("Embedder::fileEmbed(): cannot open {}", rb::to_std(path));
         return false;
     }
-    const QByteArray fileData = file.readAll();
-    file.close();
 
-    QCryptographicHash hash(QCryptographicHash::Sha256);
-    hash.addData(fileData);
+    const rb::String hexHash = rb::sha256_hex(fileData);
 
     m_db.beginFileTransaction();
 
-    const int sourceId = m_db.newSourceFileId(hash.result().toHex(), file.fileName());
+    const int sourceId = m_db.newSourceFileId(hexHash, path);
     if (sourceId < 0) {
-        m_db.rollbackFileTransaction(); // nothing was written; clean up the transaction
+        m_db.rollbackFileTransaction();
         return false; // unchanged since last index
     }
 
-    const QJsonDocument doc = QJsonDocument::fromJson(fileData);
-    QVector<QJsonObject> objects;
+    const rb::Json doc = rb::Json::parse(fileData);
+    rb::Vector<rb::Json> objects;
     if (doc.isArray()) {
-        for (const QJsonValue& v : doc.array())
-            if (v.isObject()) objects << v.toObject();
+        for (const auto& v : doc.items())
+            if (v.isObject()) objects.push_back(v);
     } else if (doc.isObject()) {
-        objects << doc.object();
+        objects.push_back(doc);
     }
 
     int added = 0;
-    for (const QJsonObject& raw : objects) {
-        if (raw.value("abstract").toBool(false)) continue; // base templates — not indexed
+    for (const rb::Json& raw : objects) {
+        if (raw.boolValue("abstract", false)) continue;
 
-        const QJsonObject resolved = CDDAResolver::resolve(raw, m_registry);
-        const Parser::Chunk chunk  = m_parser->objectToChunk(resolved);
+        const rb::Json resolved = CDDAResolver::resolve(raw, m_registry);
+        const Parser::Chunk chunk = m_parser->objectToChunk(resolved);
 
-        // Nomic embed task prefix for indexed content.
-        const QVector<float> embedding = m_generator->generate("search_document: " + chunk.embedText);
-        if (embedding.isEmpty()) {
-            qWarning() << "Embedder::fileEmbed(): empty embedding for chunk — aborting file";
+        const rb::Vector<float> embedding =
+            m_generator->generate(rb::from_std("search_document: ") + chunk.embedText);
+        if (embedding.empty()) {
+            RAGBOT_LOG_WARN("Embedder::fileEmbed(): empty embedding for chunk — aborting file");
             m_db.rollbackFileTransaction();
             return false;
         }
@@ -146,52 +149,49 @@ auto Embedder::fileEmbed(QFile& file) -> bool
     }
 
     if (!m_db.commitFileTransaction()) {
-        qWarning() << "Embedder::fileEmbed(): commit failed —"
-                   << QFileInfo(file.fileName()).fileName();
+        RAGBOT_LOG_WARN("Embedder::fileEmbed(): commit failed — {}", rb::to_std(rb::path_filename(path)));
         m_db.rollbackFileTransaction();
         return false;
     }
 
-    qDebug() << "Embedder::fileEmbed(): indexed" << added
-             << "chunks from" << QFileInfo(file.fileName()).fileName();
+    RAGBOT_LOG_INFO("Embedder::fileEmbed(): indexed {} chunks from {}",
+                    added, rb::to_std(rb::path_filename(path)));
     return true;
 }
 
 
-//--------------------------------------------------------------------------------
-auto Embedder::fileEmbedManPage(const QString& path) -> bool
+auto Embedder::fileEmbedManPage(const rb::String& path) -> bool
 {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "Embedder::fileEmbedManPage(): cannot open" << path;
+#ifdef RAGBOT_USE_QT
+    bool readOk = false;
+    const rb::Bytes fileData = rb::read_file_bytes(path, &readOk);
+    if (!readOk) {
+        RAGBOT_LOG_WARN("Embedder::fileEmbedManPage(): cannot open {}", rb::to_std(path));
         return false;
     }
-    const QByteArray fileData = file.readAll();
-    file.close();
 
-    QCryptographicHash hash(QCryptographicHash::Sha256);
-    hash.addData(fileData);
-
+    const rb::String hexHash = rb::sha256_hex(fileData);
     m_db.beginFileTransaction();
 
-    const int sourceId = m_db.newSourceFileId(hash.result().toHex(), path);
+    const int sourceId = m_db.newSourceFileId(hexHash, path);
     if (sourceId < 0) {
         m_db.rollbackFileTransaction();
-        return false; // unchanged since last index
+        return false;
     }
 
     const QVector<Parser::Chunk> chunks = ManPageResolver::fileToChunks(path);
     if (chunks.isEmpty()) {
-        qWarning() << "Embedder::fileEmbedManPage(): no chunks produced for" << path;
+        RAGBOT_LOG_WARN("Embedder::fileEmbedManPage(): no chunks produced for {}", rb::to_std(path));
         m_db.rollbackFileTransaction();
         return false;
     }
 
     int added = 0;
     for (const Parser::Chunk& chunk : chunks) {
-        const QVector<float> embedding = m_generator->generate("search_document: " + chunk.embedText);
-        if (embedding.isEmpty()) {
-            qWarning() << "Embedder::fileEmbedManPage(): empty embedding — aborting file";
+        const rb::Vector<float> embedding =
+            m_generator->generate(rb::from_std("search_document: ") + chunk.embedText);
+        if (embedding.empty()) {
+            RAGBOT_LOG_WARN("Embedder::fileEmbedManPage(): empty embedding — aborting file");
             m_db.rollbackFileTransaction();
             return false;
         }
@@ -199,29 +199,32 @@ auto Embedder::fileEmbedManPage(const QString& path) -> bool
     }
 
     if (!m_db.commitFileTransaction()) {
-        qWarning() << "Embedder::fileEmbedManPage(): commit failed —" << QFileInfo(path).fileName();
+        RAGBOT_LOG_WARN("Embedder::fileEmbedManPage(): commit failed — {}",
+                        rb::to_std(rb::path_filename(path)));
         m_db.rollbackFileTransaction();
         return false;
     }
 
-    qDebug() << "Embedder::fileEmbedManPage(): indexed" << added
-             << "chunks from" << QFileInfo(path).fileName();
+    RAGBOT_LOG_INFO("Embedder::fileEmbedManPage(): indexed {} chunks from {}",
+                    added, rb::to_std(rb::path_filename(path)));
     return true;
+#else
+    (void)path;
+    return false;
+#endif
 }
 
 
-//--------------------------------------------------------------------------------
-auto Embedder::search(const QString& query)
-    -> QVector<EmbeddingDatabase::SearchResult>
+auto Embedder::search(const rb::String& query) -> rb::Vector<EmbeddingDatabase::SearchResult>
 {
     if (!m_generator || !m_generator->isValid()) {
-        qWarning() << "Embedder::search(): generator not available";
+        RAGBOT_LOG_WARN("Embedder::search(): generator not available");
         return {};
     }
 
-    m_lastQueryEmbedding = m_generator->generate("search_query: " + query);
-    if (m_lastQueryEmbedding.isEmpty()) {
-        qWarning() << "Embedder::search(): failed to embed query";
+    m_lastQueryEmbedding = m_generator->generate(rb::from_std("search_query: ") + query);
+    if (m_lastQueryEmbedding.empty()) {
+        RAGBOT_LOG_WARN("Embedder::search(): failed to embed query");
         return {};
     }
 

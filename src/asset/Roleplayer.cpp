@@ -1,62 +1,72 @@
 #include "Roleplayer.h"
 #include "../generation/GeneratorFactory.h"
 #include "../ConfigKeys.h"
-#include <QFile>
-#include <QTextStream>
-#include <QDebug>
+#include "../compat/Logging.h"
+#include "../compat/Strings.h"
+#include "../compat/Io.h"
+#include <cstdio>
 
 
-//--------------------------------------------------------------------------------
-Roleplayer::Roleplayer(const QJsonObject& config)
-    : m_generator(GeneratorFactory::createText(config.value(ConfigKeys::Generator).toObject()))
-    , m_characterName(config.value(ConfigKeys::CharacterName).toString("Survivor"))
-    , m_characterBackground(config.value(ConfigKeys::CharacterBackground).toString())
-    , m_assetsDir(config.value(ConfigKeys::AssetsDir).toString("inputs"))
+Roleplayer::Roleplayer(const rb::Json& config)
+    : m_generator(GeneratorFactory::createText(config.value(ConfigKeys::Generator)))
+    , m_characterName(config.stringValue(ConfigKeys::CharacterName, "Survivor"))
+    , m_characterBackground(config.stringValue(ConfigKeys::CharacterBackground))
+    , m_assetsDir(config.stringValue(ConfigKeys::AssetsDir, "inputs"))
 {
     if (!m_generator || !m_generator->isValid()) {
-        qWarning() << "Roleplayer: generator failed to initialise — disabled";
+        RAGBOT_LOG_WARN("Roleplayer: generator failed to initialise — disabled");
         m_generator.reset();
     }
 }
 
 
-//--------------------------------------------------------------------------------
 auto Roleplayer::respond(
-        const QString& researchAnswer,
-        const QString& question,
-        const QVector<ConversationTurn>& history,
+        const rb::String& researchAnswer,
+        const rb::String& question,
+        const rb::Vector<ConversationTurn>& history,
         const TextGenerator::TokenSink& tokenSink
-) -> QString
+) -> rb::String
 {
     if (!m_generator || !m_generator->isValid()) {
-        qWarning() << "Roleplayer::respond(): generator not available";
+        RAGBOT_LOG_WARN("Roleplayer::respond(): generator not available");
         return {};
     }
 
-    QString promptTemplate;
-    QFile f(m_assetsDir + "/roleplayPrompt.txt");
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        promptTemplate = QString::fromUtf8(f.readAll());
-    } else {
+    bool promptOk = false;
+    rb::String promptTemplate = rb::read_file_text(
+        m_assetsDir + rb::from_std("/roleplayPrompt.txt"), &promptOk);
+    if (!promptOk) {
         promptTemplate =
-            "You are %1.\n\n"
-            "Here is some factual information to help you answer:\n%2\n\n"
-            "Someone asks you: \"%3\"\n";
+            rb::from_std("You are %1.\n\nHere is some factual information to help you answer:\n%2\n\n"
+                         "Someone asks you: \"%3\"\n");
     }
 
-    QString prompt;
-    if (!history.isEmpty()) {
-        prompt += "Prior conversation:\n";
+    rb::String prompt;
+    if (!history.empty()) {
+        prompt += rb::from_std("Prior conversation:\n");
         for (const auto& turn : history)
-            prompt += "User: " + turn.question + "\n" + m_characterName + ": " + turn.roleplayAnswer + "\n\n";
+            prompt += rb::from_std("User: ") + turn.question + rb::from_std("\n")
+                    + m_characterName + rb::from_std(": ") + turn.roleplayAnswer
+                    + rb::from_std("\n\n");
     }
-    prompt += promptTemplate.arg(m_characterName, researchAnswer, question);
+    rb::Vector<rb::String> placeholders { m_characterName, researchAnswer, question };
+    prompt += rb::replace_placeholders(promptTemplate, placeholders);
 
-    if (!tokenSink)
-        QTextStream(stdout) << "\n" << m_characterName << ": " << Qt::flush;
-    const QString answer = m_generator->generateText(m_characterBackground, /*stream=*/true, prompt, tokenSink);
-    if (!tokenSink)
-        QTextStream(stdout) << "\n" << Qt::flush;
+    if (!tokenSink) {
+        std::fputc('\n', stdout);
+#ifdef RAGBOT_USE_QT
+        std::fputs(m_characterName.toStdString().c_str(), stdout);
+#else
+        std::fputs(m_characterName.c_str(), stdout);
+#endif
+        std::fputs(": ", stdout);
+        std::fflush(stdout);
+    }
+    const rb::String answer = m_generator->generateText(m_characterBackground, true, prompt, tokenSink);
+    if (!tokenSink) {
+        std::fputc('\n', stdout);
+        std::fflush(stdout);
+    }
 
     return answer;
 }

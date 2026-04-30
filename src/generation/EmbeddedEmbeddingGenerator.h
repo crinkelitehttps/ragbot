@@ -2,7 +2,7 @@
 #define EMBEDDEDEMBEDDINGGENERATOR_H
 
 #include "EmbeddingGenerator.h"
-#include <QJsonObject>
+#include "../compat/Json.h"
 
 #include "llama.h"
 #pragma GCC diagnostic push
@@ -14,10 +14,10 @@
 class EmbeddedEmbeddingGenerator : public EmbeddingGenerator
 {
 public:
-    explicit EmbeddedEmbeddingGenerator(const QJsonObject& config);
+    explicit EmbeddedEmbeddingGenerator(const rb::Json& config);
     ~EmbeddedEmbeddingGenerator() override;
 
-    [[nodiscard]] auto generate(const QString& data) -> QVector<float> override;
+    [[nodiscard]] auto generate(const rb::String& data) -> rb::Vector<float> override;
     [[nodiscard]] auto isValid() const -> bool override { return m_isValid; }
 
 private:

@@ -1,7 +1,7 @@
 #ifndef VECTORINDEX_H
 #define VECTORINDEX_H
 
-#include <QVector>
+#include "../compat/Types.h"
 #include <cstdint>
 
 // Brute-force cosine similarity index for dense float vectors.
@@ -23,28 +23,20 @@ public:
 
     explicit VectorIndex(int dimensions);
 
-    // Appends a normalized vector and returns its assigned ID.
-    // Returns -1 and warns if the dimension does not match.
-    auto add(const QVector<float>& vec) -> int64_t;
-
-    // Inserts a normalized vector at a specific ID (for warm-start from DB).
-    // Grows the internal store as needed; gaps are left as empty slots.
-    auto load(int64_t id, const QVector<float>& vec) -> void;
-
-    // Truncates the index back to priorSize, undoing any add() calls since
-    // that snapshot was taken.  Used to roll back a failed indexing transaction.
+    auto add(const rb::Vector<float>& vec) -> int64_t;
+    auto load(int64_t id, const rb::Vector<float>& vec) -> void;
     auto rollbackTo(int64_t priorSize) -> void;
 
-    // Returns up to topK hits ordered by descending similarity.
-    // Returns an empty vector if the index is empty or dimensions mismatch.
-    [[nodiscard]] auto search(const QVector<float>& query, int topK) const -> QVector<Hit>;
+    [[nodiscard]] auto search(const rb::Vector<float>& query, int topK) const
+        -> rb::Vector<Hit>;
 
-    [[nodiscard]] auto ntotal() const -> int64_t { return static_cast<int64_t>(m_vectors.size()); }
-    [[nodiscard]] auto dimensions() const -> int  { return m_dimensions; }
+    [[nodiscard]] auto ntotal() const -> int64_t
+        { return static_cast<int64_t>(m_vectors.size()); }
+    [[nodiscard]] auto dimensions() const -> int { return m_dimensions; }
 
 private:
     int m_dimensions;
-    QVector<QVector<float>> m_vectors; // m_vectors[id] == embedding for that id
+    rb::Vector<rb::Vector<float>> m_vectors;
 };
 
 #endif // VECTORINDEX_H

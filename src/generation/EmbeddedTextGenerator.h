@@ -2,7 +2,7 @@
 #define EMBEDDEDTEXTGENERATOR_H
 
 #include "TextGenerator.h"
-#include <QJsonObject>
+#include "../compat/Json.h"
 
 #include "llama.h"
 #pragma GCC diagnostic push
@@ -14,15 +14,15 @@
 class EmbeddedTextGenerator : public TextGenerator
 {
 public:
-    explicit EmbeddedTextGenerator(const QJsonObject& config);
+    explicit EmbeddedTextGenerator(const rb::Json& config);
     ~EmbeddedTextGenerator() override;
 
     auto generateText(
-        const QString& systemPrompt,
+        const rb::String& systemPrompt,
         bool isStream,
-        const QString& prompt,
+        const rb::String& prompt,
         const TokenSink& tokenSink = {}
-    ) -> QString override;
+    ) -> rb::String override;
 
     [[nodiscard]] auto isValid() const -> bool override { return m_isValid; }
 

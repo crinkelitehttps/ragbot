@@ -1,24 +1,23 @@
 #ifndef ROLEPLAYDATABASE_H
 #define ROLEPLAYDATABASE_H
 
-#include <QString>
-#include <QVector>
+#include "../compat/Types.h"
 #include <sqlite3.h>
 
 class RoleplayDatabase
 {
 public:
-    explicit RoleplayDatabase(const QString& dbName = "conversations.db");
+    explicit RoleplayDatabase(const rb::String& dbName = "conversations.db");
     ~RoleplayDatabase();
 
     RoleplayDatabase(const RoleplayDatabase&)            = delete;
     RoleplayDatabase& operator=(const RoleplayDatabase&) = delete;
 
     auto logConversation(
-        const QVector<float>& queryEmbedding,
-        const QString& query,
-        const QString& researchResponse,
-        const QString& roleplayResponse = {}
+        const rb::Vector<float>& queryEmbedding,
+        const rb::String& query,
+        const rb::String& researchResponse,
+        const rb::String& roleplayResponse = {}
     ) -> bool;
 
     [[nodiscard]] auto isOpen() const -> bool { return m_db != nullptr; }

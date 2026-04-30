@@ -1,19 +1,19 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include <QString>
-#include <QJsonObject>
+#include "../compat/Json.h"
+#include "../compat/Types.h"
 
 class Parser
 {
 public:
     struct Chunk {
-        QString embedText; // flattened natural-language text for embedding generation
-        QString content;   // verbatim content stored in the DB and shown to the LLM
+        rb::String embedText; // flattened natural-language text for embedding generation
+        rb::String content;   // verbatim content stored in the DB and shown to the LLM
     };
 
     virtual ~Parser() = default;
-    virtual auto objectToChunk(const QJsonObject& obj) -> Chunk = 0;
+    virtual auto objectToChunk(const rb::Json& obj) -> Chunk = 0;
 
 protected:
     Parser() = default;

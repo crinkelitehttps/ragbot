@@ -1,39 +1,26 @@
 #ifndef CDDARESOLVER_H
 #define CDDARESOLVER_H
 
-#include <QHash>
-#include <QJsonObject>
-#include <QString>
-#include <QStringList>
+#include "../compat/Json.h"
+#include "../compat/Types.h"
 
 // Resolves Cataclysm: Dark Days Ahead copy-from inheritance.
-// Objects in CDDA JSON use "copy-from" to inherit fields from a named base object.
-// CDDAResolver builds a registry of all known objects and merges inheritance chains
-// so that each resolved object contains its complete effective data.
 class CDDAResolver
 {
 public:
-    using Registry = QHash<QString, QJsonObject>;
+    using Registry = rb::Map<rb::String, rb::Json>;
 
-    // Scan all *.json files under dataDir and return a registry of all objects
-    // keyed by their "id" or "abstract" field.
-    static auto buildRegistry(const QString& dataDir) -> Registry;
-    static auto buildRegistry(const QStringList& dataDirs) -> Registry;
+    static auto buildRegistry(const rb::String& dataDir) -> Registry;
+    static auto buildRegistry(const rb::Vector<rb::String>& dataDirs) -> Registry;
+    static auto buildRegistryFromFiles(const rb::Vector<rb::String>& filePaths) -> Registry;
 
-    // Build a registry from an already-collected list of file paths (no directory scan).
-    static auto buildRegistryFromFiles(const QStringList& filePaths) -> Registry;
-
-    // Return obj with all copy-from fields merged in from the registry.
-    // Child fields take precedence over parent fields.
-    // Returns the object unchanged (minus copy-from) if the parent is not found.
-    static auto resolve(const QJsonObject& obj, const Registry& registry, int depth = 0)
-        -> QJsonObject;
+    static auto resolve(const rb::Json& obj, const Registry& registry, int depth = 0)
+        -> rb::Json;
 
 private:
     CDDAResolver() = delete;
 
-    static auto mergeObjects(const QJsonObject& base, const QJsonObject& overlay)
-        -> QJsonObject;
+    static auto mergeObjects(const rb::Json& base, const rb::Json& overlay) -> rb::Json;
 
     static constexpr int MaxDepth { 16 };
 };

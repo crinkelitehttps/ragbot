@@ -1,12 +1,12 @@
 #ifndef CONVERSATIONTURN_H
 #define CONVERSATIONTURN_H
 
-#include <QString>
+#include "compat/Types.h"
 
 struct ConversationTurn {
-    QString question;
-    QString researchAnswer;
-    QString roleplayAnswer;
+    rb::String question;
+    rb::String researchAnswer;
+    rb::String roleplayAnswer;
 };
 
 #endif // CONVERSATIONTURN_H

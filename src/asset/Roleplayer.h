@@ -2,30 +2,30 @@
 #define ROLEPLAYER_H
 
 #include <memory>
-#include <QJsonObject>
-#include <QString>
+#include "../compat/Json.h"
+#include "../compat/Types.h"
 #include "../ConversationTurn.h"
 #include "../generation/TextGenerator.h"
 
 class Roleplayer
 {
 public:
-    explicit Roleplayer(const QJsonObject& config);
+    explicit Roleplayer(const rb::Json& config);
 
     auto respond(
-        const QString& researchAnswer,
-        const QString& question,
-        const QVector<ConversationTurn>& history,
+        const rb::String& researchAnswer,
+        const rb::String& question,
+        const rb::Vector<ConversationTurn>& history,
         const TextGenerator::TokenSink& tokenSink = {}
-    ) -> QString;
+    ) -> rb::String;
 
-    [[nodiscard]] auto characterName() const -> const QString& { return m_characterName; }
+    [[nodiscard]] auto characterName() const -> const rb::String& { return m_characterName; }
 
 private:
     std::unique_ptr<TextGenerator> m_generator;
-    QString                        m_characterName;
-    QString                        m_characterBackground;
-    QString                        m_assetsDir;
+    rb::String                     m_characterName;
+    rb::String                     m_characterBackground;
+    rb::String                     m_assetsDir;
 };
 
 #endif // ROLEPLAYER_H

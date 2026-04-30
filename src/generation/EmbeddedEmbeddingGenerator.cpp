@@ -1,5 +1,5 @@
 #include "EmbeddedEmbeddingGenerator.h"
-#include <QDebug>
+#include "../compat/Logging.h"
 #include "llama.h"
 #include "common.h"
 #include "../ConfigKeys.h"
@@ -13,26 +13,26 @@ static void initLlamaBackend()
     }
 }
 
-//--------------------------------------------------------------------------------
-EmbeddedEmbeddingGenerator::EmbeddedEmbeddingGenerator(const QJsonObject& config)
+EmbeddedEmbeddingGenerator::EmbeddedEmbeddingGenerator(const rb::Json& config)
 {
     initLlamaBackend();
 
     llama_log_set([](ggml_log_level level, const char* text, void*) {
         if (level == GGML_LOG_LEVEL_ERROR)
-            qCritical() << "llama.cpp:" << text;
+            RAGBOT_LOG_ERROR("llama.cpp: {}", text);
     }, nullptr);
 
-    const QString modelPath = config.value(ConfigKeys::ModelPath).toString();
-    if (modelPath.isEmpty()) {
-        qCritical() << "EmbeddedEmbeddingGenerator: no modelPath in config";
+    const rb::String modelPath = config.stringValue(ConfigKeys::ModelPath);
+    if (rb::str_empty(modelPath)) {
+        RAGBOT_LOG_ERROR("EmbeddedEmbeddingGenerator: no modelPath in config");
         return;
     }
 
-    m_model = llama_model_load_from_file(modelPath.toUtf8().constData(),
+    m_model = llama_model_load_from_file(rb::to_std(modelPath).c_str(),
                                          llama_model_default_params());
     if (!m_model) {
-        qCritical() << "EmbeddedEmbeddingGenerator: failed to load model:" << modelPath;
+        RAGBOT_LOG_ERROR("EmbeddedEmbeddingGenerator: failed to load model: {}",
+                         rb::to_std(modelPath));
         return;
     }
 
@@ -44,31 +44,29 @@ EmbeddedEmbeddingGenerator::EmbeddedEmbeddingGenerator(const QJsonObject& config
 
     m_ctx = llama_init_from_model(m_model, ctx);
     if (!m_ctx) {
-        qCritical() << "EmbeddedEmbeddingGenerator: failed to create context";
+        RAGBOT_LOG_ERROR("EmbeddedEmbeddingGenerator: failed to create context");
         return;
     }
 
     m_isValid = true;
 }
 
-//--------------------------------------------------------------------------------
 EmbeddedEmbeddingGenerator::~EmbeddedEmbeddingGenerator()
 {
     if (m_ctx)   { llama_free(m_ctx);        m_ctx   = nullptr; }
     if (m_model) { llama_model_free(m_model); m_model = nullptr; }
 }
 
-//--------------------------------------------------------------------------------
-auto EmbeddedEmbeddingGenerator::generate(const QString& data) -> QVector<float>
+auto EmbeddedEmbeddingGenerator::generate(const rb::String& data) -> rb::Vector<float>
 {
     if (!m_isValid) return {};
 
-    auto vtok = common_tokenize(m_ctx, data.toStdString(), true, true);
+    auto vtok = common_tokenize(m_ctx, rb::to_std(data), true, true);
 
     const auto limit = llama_n_ubatch(m_ctx);
     if (vtok.size() > limit) {
-        qWarning() << "EmbeddedEmbeddingGenerator: truncating tokens from"
-                   << vtok.size() << "to" << limit;
+        RAGBOT_LOG_WARN("EmbeddedEmbeddingGenerator: truncating tokens from {} to {}",
+                        static_cast<int>(vtok.size()), static_cast<int>(limit));
         vtok.resize(limit);
     }
 
@@ -81,19 +79,19 @@ auto EmbeddedEmbeddingGenerator::generate(const QString& data) -> QVector<float>
     }
 
     if (llama_decode(m_ctx, batch) != 0) {
-        qWarning() << "EmbeddedEmbeddingGenerator: llama_decode failed";
+        RAGBOT_LOG_WARN("EmbeddedEmbeddingGenerator: llama_decode failed");
         llama_batch_free(batch);
         return {};
     }
 
-    const int    n     = llama_model_n_embd(m_model);
-    const float* emb   = llama_get_embeddings_seq(m_ctx, 0);
-    if (!emb) emb      = llama_get_embeddings(m_ctx);
+    const int    n   = llama_model_n_embd(m_model);
+    const float* emb = llama_get_embeddings_seq(m_ctx, 0);
+    if (!emb) emb    = llama_get_embeddings(m_ctx);
 
-    QVector<float> result;
+    rb::Vector<float> result;
     if (emb) {
-        result.reserve(n);
-        for (int i = 0; i < n; ++i) result.append(emb[i]);
+        result.reserve(static_cast<size_t>(n));
+        for (int i = 0; i < n; ++i) result.push_back(emb[i]);
     }
 
     llama_batch_free(batch);

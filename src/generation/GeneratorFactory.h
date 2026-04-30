@@ -2,24 +2,21 @@
 #define GENERATORFACTORY_H
 
 #include <memory>
-#include <QJsonObject>
+#include "../compat/Json.h"
 #include "EmbeddingGenerator.h"
 #include "TextGenerator.h"
 #include "RerankGenerator.h"
 
-// Creates generator instances from a config object.
-// Config must contain "backend": "embedded" or "backend": "network".
-// "embedded" requires RAGBOT_EMBEDDED_INFERENCE to be defined at build time.
 class GeneratorFactory
 {
 public:
-    static auto createEmbedding(const QJsonObject& config)
+    static auto createEmbedding(const rb::Json& config)
         -> std::unique_ptr<EmbeddingGenerator>;
 
-    static auto createText(const QJsonObject& config)
+    static auto createText(const rb::Json& config)
         -> std::unique_ptr<TextGenerator>;
 
-    static auto createRerank(const QJsonObject& config)
+    static auto createRerank(const rb::Json& config)
         -> std::unique_ptr<RerankGenerator>;
 
 private:

@@ -1,9 +1,8 @@
 #ifndef EMBEDDINGDATABASE_H
 #define EMBEDDINGDATABASE_H
 
-#include <QJsonObject>
-#include <QString>
-#include <QVector>
+#include "../compat/Json.h"
+#include "../compat/Types.h"
 #include <sqlite3.h>
 #include "VectorIndex.h"
 
@@ -11,48 +10,35 @@ class EmbeddingDatabase
 {
 public:
     struct SearchResult {
-        QString sourceFile;
-        QString content;
+        rb::String sourceFile;
+        rb::String content;
         float   similarity;
         float   rerankScore { -1.0f }; // set by Reranker; negative means not reranked
     };
 
-    explicit EmbeddingDatabase(const QJsonObject& embedConfig);
+    explicit EmbeddingDatabase(const rb::Json& embedConfig);
     ~EmbeddingDatabase();
 
-    // Non-copyable: owns a raw sqlite3* handle.
     EmbeddingDatabase(const EmbeddingDatabase&)            = delete;
     EmbeddingDatabase& operator=(const EmbeddingDatabase&) = delete;
 
-    // Returns a new source_file_id for the given file, or -1 if the checksum
-    // is already present (file unchanged since last run).
-    auto newSourceFileId(const QByteArray& contentChecksum, const QString& file) -> int;
+    // Returns a new source_file_id or -1 if checksum already indexed.
+    auto newSourceFileId(const rb::String& contentChecksum, const rb::String& file) -> int;
 
-    // Normalizes chunkVector, adds it to the in-memory index, and persists
-    // both the vector and its text content to the database.
     auto embeddingSave(
         int sourceId,
-        const QVector<float>& chunkVector,
-        const QString& chunkContent
+        const rb::Vector<float>& chunkVector,
+        const rb::String& chunkContent
     ) -> bool;
 
-    // Returns the top-K most similar stored chunks for the given embedding,
-    // filtered to those with similarity >= minSimilarity.
-    // The query vector is normalized internally before searching.
     auto textResults(
-        const QVector<float>& queryEmbedding,
+        const rb::Vector<float>& queryEmbedding,
         int   topK          = DefaultTopK,
         float minSimilarity = 0.0f
-    ) -> QVector<SearchResult>;
+    ) -> rb::Vector<SearchResult>;
 
-    // Outer batch transaction wrapping the entire indexing pass.
-    // A single BEGIN/COMMIT amortizes fsync cost across all files.
     auto beginBatch()    -> bool;
     auto commitBatch()   -> bool;
-
-    // Per-file savepoints nested inside the batch transaction.
-    // rollbackFileTransaction() reverts both the SQLite savepoint and any
-    // in-memory VectorIndex entries added since beginFileTransaction().
     auto beginFileTransaction()    -> bool;
     auto commitFileTransaction()   -> bool;
     auto rollbackFileTransaction() -> void;
@@ -60,23 +46,16 @@ public:
     [[nodiscard]] auto isOpen() const -> bool { return m_db != nullptr; }
 
 private:
-    void initialize(const QString& dbName);
+    void initialize(const rb::String& dbName);
     void loadExistingEmbeddings();
-
-    // Executes a SQL statement and logs any error. Returns true on success.
     auto exec(const char* sql) -> bool;
-
-    // Normalizes vec in-place to unit length. No-op if the norm is zero.
-    static auto normalizeVector(QVector<float>& vec) -> void;
+    static auto normalizeVector(rb::Vector<float>& vec) -> void;
 
     VectorIndex m_index;
     sqlite3*    m_db {};
-    int64_t     m_txIndexSnapshot { -1 }; // ntotal() at the start of the current file transaction
+    int64_t     m_txIndexSnapshot { -1 };
 
-    // Increment this whenever the table definitions change.
-    // A mismatch triggers a full schema rebuild (all data is re-indexed).
     static constexpr int SchemaVersion { 5 };
-
     static constexpr int Dimensions { 768 };
     static constexpr int DefaultTopK { 10 };
 };

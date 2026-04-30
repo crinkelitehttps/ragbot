@@ -2,7 +2,7 @@
 #define EMBEDDEDRERANKGENERATOR_H
 
 #include "RerankGenerator.h"
-#include <QJsonObject>
+#include "../compat/Json.h"
 
 #include "llama.h"
 #pragma GCC diagnostic push
@@ -14,14 +14,15 @@
 class EmbeddedRerankGenerator : public RerankGenerator
 {
 public:
-    explicit EmbeddedRerankGenerator(const QJsonObject& config);
+    explicit EmbeddedRerankGenerator(const rb::Json& config);
     ~EmbeddedRerankGenerator() override;
 
-    auto score(const QString& query, const QStringList& documents) -> QVector<float> override;
+    auto score(const rb::String& query,
+               const rb::Vector<rb::String>& documents) -> rb::Vector<float> override;
     [[nodiscard]] auto isValid() const -> bool override { return m_isValid; }
 
 private:
-    auto scoreOne(const QString& query, const QString& document) -> float;
+    auto scoreOne(const rb::String& query, const rb::String& document) -> float;
 
     static constexpr int DefaultBatch { 512 };
     static constexpr int DefaultCtx   { 2048 };

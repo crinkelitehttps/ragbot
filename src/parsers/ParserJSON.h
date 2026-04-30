@@ -2,23 +2,19 @@
 #define PARSERJSON_H
 
 #include "Parser.h"
-#include <QJsonValue>
 
-// Converts a single (pre-resolved) JSON object into a Parser::Chunk.
-// embedText is a flattened natural-language representation for embedding.
-// content is the compact JSON string for storage and LLM context.
 class ParserJSON : public Parser
 {
 public:
     ParserJSON() = default;
-    auto objectToChunk(const QJsonObject& obj) -> Chunk override;
+    auto objectToChunk(const rb::Json& obj) -> Chunk override;
 
 private:
-    auto stringifyObject(const QJsonObject& obj) -> QString;
+    auto stringifyObject(const rb::Json& obj) -> rb::String;
     auto extractTextRecursive(
-        const QJsonValue& value,
-        QStringList& texts,
-        const QString& prefix = QString()
+        const rb::Json& value,
+        rb::Vector<rb::String>& texts,
+        const rb::String& prefix = {}
     ) -> void;
 };
 

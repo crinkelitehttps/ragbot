@@ -9,6 +9,7 @@
 #include "RAGBot.h"
 #include "RAGBotSession.h"
 #include "ConfigKeys.h"
+#include "compat/Json.h"
 
 auto main(int argc, char *argv[]) -> int
 {
@@ -91,7 +92,7 @@ auto main(int argc, char *argv[]) -> int
 
     const bool loadOnly = cli.isSet(loadOpt);
 
-    RAGBotSession session(root, loadOnly);
+    RAGBotSession session(rb::Json(root), loadOnly);
     if (!session.isValid()) return 1;
     if (loadOnly) return 0;
 

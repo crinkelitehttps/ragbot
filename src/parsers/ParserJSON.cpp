@@ -1,74 +1,95 @@
 #include "ParserJSON.h"
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QStringList>
+#include "../compat/Strings.h"
 
 
-//--------------------------------------------------------------------------------
-auto ParserJSON::objectToChunk(const QJsonObject& obj) -> Chunk
+auto ParserJSON::objectToChunk(const rb::Json& obj) -> Chunk
 {
     return {
         stringifyObject(obj),
-        QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))
+        obj.dumpString(true)
     };
 }
 
 
-//--------------------------------------------------------------------------------
-auto ParserJSON::stringifyObject(const QJsonObject& obj) -> QString
+auto ParserJSON::stringifyObject(const rb::Json& obj) -> rb::String
 {
-    QStringList parts;
+    rb::Vector<rb::String> parts;
 
     if (obj.contains("id"))
-        parts << "id is " + obj["id"].toString();
+        parts.push_back(rb::from_std("id is ") + obj.stringValue("id"));
 
     if (obj.contains("name")) {
-        const QString name = obj["name"].isObject()
-            ? obj["name"].toObject()["str"].toString()
-            : obj["name"].toString();
-        if (!name.isEmpty()) parts << "name is " + name;
+        const rb::Json nameVal = obj.value("name");
+        const rb::String name = nameVal.isObject()
+            ? nameVal.stringValue("str")
+            : nameVal.toString();
+        if (!rb::str_empty(name))
+            parts.push_back(rb::from_std("name is ") + name);
     }
 
-    QStringList details;
-    extractTextRecursive(QJsonValue(obj), details);
-    for (const QString& d : details) {
-        if (!d.startsWith("id is") && !d.startsWith("name is"))
-            parts << d;
+    rb::Vector<rb::String> details;
+    extractTextRecursive(obj, details);
+    for (const rb::String& d : details) {
+        if (!rb::starts_with(d, rb::from_std("id is")) &&
+            !rb::starts_with(d, rb::from_std("name is")))
+            parts.push_back(d);
     }
 
-    return parts.join(' ');
+    rb::String out;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i > 0) out += rb::from_std(" ");
+        out += parts[i];
+    }
+    return out;
 }
 
 
-//--------------------------------------------------------------------------------
 auto ParserJSON::extractTextRecursive(
-        const QJsonValue& value,
-        QStringList& texts,
-        const QString& prefix
+        const rb::Json& value,
+        rb::Vector<rb::String>& texts,
+        const rb::String& prefix
 ) -> void
 {
     if (value.isObject()) {
-        const QJsonObject obj = value.toObject();
-        for (auto it = obj.begin(); it != obj.end(); ++it) {
-            const QString& key = it.key();
-            if (key == "//" || key == "type") continue;
+        for (const rb::String& key : value.keys()) {
+            if (key == rb::from_std("//") || key == rb::from_std("type")) continue;
 
-            const QString fullKey = prefix.isEmpty() ? key
-                                  : prefix + ' ' + key;
-            if (it.value().isObject() || it.value().isArray()) {
-                extractTextRecursive(it.value(), texts, fullKey);
+            const rb::String fullKey = rb::str_empty(prefix)
+                ? key : prefix + rb::from_std(" ") + key;
+            const rb::Json val = value.value(key);
+            if (val.isObject() || val.isArray()) {
+                extractTextRecursive(val, texts, fullKey);
             } else {
-                texts << QString(fullKey).replace('_', ' ') + " is "
-                         + it.value().toVariant().toString();
+                // Replace underscores with spaces in the key portion, then append the value
+                rb::String keyNorm = fullKey;
+#ifdef RAGBOT_USE_QT
+                keyNorm = keyNorm.replace('_', ' ');
+                texts.push_back(keyNorm + rb::from_std(" is ") + val.toString());
+#else
+                for (char& ch : keyNorm) if (ch == '_') ch = ' ';
+                texts.push_back(keyNorm + rb::from_std(" is ") + val.toString());
+#endif
             }
         }
     } else if (value.isArray()) {
-        QStringList items;
-        for (const QJsonValue& item : value.toArray()) {
-            if (item.isString()) items << item.toString();
+        rb::Vector<rb::String> items;
+        for (const rb::Json& item : value.items()) {
+            if (item.isString()) items.push_back(item.toString());
             else extractTextRecursive(item, texts, prefix);
         }
-        if (!items.isEmpty())
-            texts << QString(prefix).replace('_', ' ') + " includes: " + items.join(", ");
+        if (!items.empty()) {
+            rb::String keyNorm = prefix;
+#ifdef RAGBOT_USE_QT
+            keyNorm = keyNorm.replace('_', ' ');
+#else
+            for (char& ch : keyNorm) if (ch == '_') ch = ' ';
+#endif
+            rb::String joined = keyNorm + rb::from_std(" includes: ");
+            for (size_t i = 0; i < items.size(); ++i) {
+                if (i > 0) joined += rb::from_std(", ");
+                joined += items[i];
+            }
+            texts.push_back(joined);
+        }
     }
 }

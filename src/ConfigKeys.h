@@ -1,57 +1,57 @@
 #pragma once
-#include <QLatin1String>
+#include "compat/Types.h"
 
 namespace ConfigKeys {
 
     // ── Root section keys ─────────────────────────────────────────────────────
-    inline const QLatin1String Embedder        { "embedder"        };
-    inline const QLatin1String Reranker        { "reranker"        };
-    inline const QLatin1String Researcher      { "researcher"      };
-    inline const QLatin1String Roleplayer      { "roleplayer"      };
-    inline const QLatin1String ConversationsDb { "conversationsDb" };
+    inline const rb::String Embedder        { "embedder"        };
+    inline const rb::String Reranker        { "reranker"        };
+    inline const rb::String Researcher      { "researcher"      };
+    inline const rb::String Roleplayer      { "roleplayer"      };
+    inline const rb::String ConversationsDb { "conversationsDb" };
 
     // ── Shared subkeys ────────────────────────────────────────────────────────
-    inline const QLatin1String Generator { "generator" };
-    inline const QLatin1String Enabled   { "enabled"   };
+    inline const rb::String Generator { "generator" };
+    inline const rb::String Enabled   { "enabled"   };
 
     // ── Embedder ──────────────────────────────────────────────────────────────
-    inline const QLatin1String DbName              { "name"                };
-    inline const QLatin1String Files               { "files"               };
-    inline const QLatin1String ParserType          { "parserType"          };
-    inline const QLatin1String TopK                { "topK"                };
-    inline const QLatin1String SimilarityThreshold { "similarityThreshold" };
-    inline const QLatin1String SkipIndex           { "skipIndex"           };
+    inline const rb::String DbName              { "name"                };
+    inline const rb::String Files               { "files"               };
+    inline const rb::String ParserType          { "parserType"          };
+    inline const rb::String TopK                { "topK"                };
+    inline const rb::String SimilarityThreshold { "similarityThreshold" };
+    inline const rb::String SkipIndex           { "skipIndex"           };
 
     // ── Reranker ──────────────────────────────────────────────────────────────
-    inline const QLatin1String TopN { "topN" };
+    inline const rb::String TopN { "topN" };
 
     // ── Researcher ────────────────────────────────────────────────────────────
-    inline const QLatin1String Instruction { "instruction" };
+    inline const rb::String Instruction { "instruction" };
 
     // ── Roleplayer ────────────────────────────────────────────────────────────
-    inline const QLatin1String CharacterName       { "characterName"       };
-    inline const QLatin1String CharacterBackground { "characterBackground" };
-    inline const QLatin1String AssetsDir           { "assetsDir"           };
+    inline const rb::String CharacterName       { "characterName"       };
+    inline const rb::String CharacterBackground { "characterBackground" };
+    inline const rb::String AssetsDir           { "assetsDir"           };
 
     // ── Generator block ───────────────────────────────────────────────────────
-    inline const QLatin1String Backend        { "backend"        };
-    inline const QLatin1String ModelName      { "modelName"      };
-    inline const QLatin1String Timeout        { "timeout"        };
-    inline const QLatin1String BasePath       { "basePath"       };
-    inline const QLatin1String RemotePath     { "remotePath"     }; // deprecated alias
-    inline const QLatin1String ModelPath      { "modelPath"      };
-    inline const QLatin1String Temperature    { "temperature"    };
-    inline const QLatin1String TopP           { "topP"           };
-    inline const QLatin1String RepeatPenalty  { "repeatPenalty"  };
-    inline const QLatin1String MaxTokens      { "maxTokens"      };
-    inline const QLatin1String EnableThinking { "enableThinking" };
+    inline const rb::String Backend        { "backend"        };
+    inline const rb::String ModelName      { "modelName"      };
+    inline const rb::String Timeout        { "timeout"        };
+    inline const rb::String BasePath       { "basePath"       };
+    inline const rb::String RemotePath     { "remotePath"     }; // deprecated alias
+    inline const rb::String ModelPath      { "modelPath"      };
+    inline const rb::String Temperature    { "temperature"    };
+    inline const rb::String TopP           { "topP"           };
+    inline const rb::String RepeatPenalty  { "repeatPenalty"  };
+    inline const rb::String MaxTokens      { "maxTokens"      };
+    inline const rb::String EnableThinking { "enableThinking" };
 
     // ── Backend values ────────────────────────────────────────────────────────
-    inline const QLatin1String BackendEmbedded { "embedded" };
-    inline const QLatin1String BackendNetwork  { "network"  };
+    inline const rb::String BackendEmbedded { "embedded" };
+    inline const rb::String BackendNetwork  { "network"  };
 
     // ── Parser type values ────────────────────────────────────────────────────
-    inline const QLatin1String ParserCddaJson { "cdda_json" };
-    inline const QLatin1String ParserManPage  { "man_page"  };
+    inline const rb::String ParserCddaJson { "cdda_json" };
+    inline const rb::String ParserManPage  { "man_page"  };
 
 } // namespace ConfigKeys

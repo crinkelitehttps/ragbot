@@ -1,15 +1,14 @@
 #ifndef RERANKGENERATOR_H
 #define RERANKGENERATOR_H
 
-#include <QStringList>
-#include <QVector>
+#include "../compat/Types.h"
 
 class RerankGenerator
 {
 public:
     virtual ~RerankGenerator() = default;
-    // Returns a relevance score per document in input order.
-    virtual auto score(const QString& query, const QStringList& documents) -> QVector<float> = 0;
+    virtual auto score(const rb::String& query,
+                       const rb::Vector<rb::String>& documents) -> rb::Vector<float> = 0;
     virtual auto isValid() const -> bool = 0;
 };
 

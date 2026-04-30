@@ -7,79 +7,73 @@
 #include "EmbeddedRerankGenerator.h"
 #endif
 #include "../ConfigKeys.h"
-#include <QDebug>
+#include "../compat/Logging.h"
 
 
-//--------------------------------------------------------------------------------
-auto GeneratorFactory::createEmbedding(const QJsonObject& config)
+auto GeneratorFactory::createEmbedding(const rb::Json& config)
     -> std::unique_ptr<EmbeddingGenerator>
 {
-    const QString backend = config.value(ConfigKeys::Backend).toString();
+    const rb::String backend = config.stringValue(ConfigKeys::Backend);
 
     if (backend == ConfigKeys::BackendEmbedded) {
 #ifdef RAGBOT_EMBEDDED_INFERENCE
         return std::make_unique<EmbeddedEmbeddingGenerator>(config);
 #else
-        qCritical() << "GeneratorFactory: backend=embedded requested but binary was built "
-                       "without RAGBOT_EMBEDDED_INFERENCE";
+        RAGBOT_LOG_ERROR("GeneratorFactory: backend=embedded requested but binary was built "
+                         "without RAGBOT_EMBEDDED_INFERENCE");
         return nullptr;
 #endif
     }
 
-    if (backend == ConfigKeys::BackendNetwork || backend.isEmpty()) {
+    if (backend == ConfigKeys::BackendNetwork || rb::str_empty(backend))
         return std::make_unique<GeneratorIP>(config);
-    }
 
-    qCritical() << "GeneratorFactory: unknown backend:" << backend;
+    RAGBOT_LOG_ERROR("GeneratorFactory: unknown backend: {}", rb::to_std(backend));
     return nullptr;
 }
 
 
-//--------------------------------------------------------------------------------
-auto GeneratorFactory::createText(const QJsonObject& config)
+auto GeneratorFactory::createText(const rb::Json& config)
     -> std::unique_ptr<TextGenerator>
 {
-    const QString backend = config.value(ConfigKeys::Backend).toString();
+    const rb::String backend = config.stringValue(ConfigKeys::Backend);
 
     if (backend == ConfigKeys::BackendEmbedded) {
 #ifdef RAGBOT_EMBEDDED_INFERENCE
         return std::make_unique<EmbeddedTextGenerator>(config);
 #else
-        qCritical() << "GeneratorFactory: backend=embedded requested but binary was built "
-                       "without RAGBOT_EMBEDDED_INFERENCE";
+        RAGBOT_LOG_ERROR("GeneratorFactory: backend=embedded requested but binary was built "
+                         "without RAGBOT_EMBEDDED_INFERENCE");
         return nullptr;
 #endif
     }
 
-    if (backend == ConfigKeys::BackendNetwork || backend.isEmpty()) {
+    if (backend == ConfigKeys::BackendNetwork || rb::str_empty(backend))
         return std::make_unique<GeneratorIP>(config);
-    }
 
-    qCritical() << "GeneratorFactory: unknown backend:" << backend;
+    RAGBOT_LOG_ERROR("GeneratorFactory: unknown backend: {}", rb::to_std(backend));
     return nullptr;
 }
 
 
-//--------------------------------------------------------------------------------
-auto GeneratorFactory::createRerank(const QJsonObject& config)
+auto GeneratorFactory::createRerank(const rb::Json& config)
     -> std::unique_ptr<RerankGenerator>
 {
-    const QString backend = config.value(ConfigKeys::Backend).toString();
+    const rb::String backend = config.stringValue(ConfigKeys::Backend);
 
     if (backend == ConfigKeys::BackendEmbedded) {
 #ifdef RAGBOT_EMBEDDED_INFERENCE
         return std::make_unique<EmbeddedRerankGenerator>(config);
 #else
-        qCritical() << "GeneratorFactory: backend=embedded requested but binary was built "
-                       "without RAGBOT_EMBEDDED_INFERENCE";
+        RAGBOT_LOG_ERROR("GeneratorFactory: backend=embedded requested but binary was built "
+                         "without RAGBOT_EMBEDDED_INFERENCE");
         return nullptr;
 #endif
     }
 
-    if (backend == ConfigKeys::BackendNetwork || backend.isEmpty()) {
+    if (backend == ConfigKeys::BackendNetwork || rb::str_empty(backend))
         return std::make_unique<RerankGeneratorIP>(config);
-    }
 
-    qCritical() << "GeneratorFactory: unknown backend:" << backend;
+    RAGBOT_LOG_ERROR("GeneratorFactory: unknown backend: {}", rb::to_std(backend));
     return nullptr;
 }

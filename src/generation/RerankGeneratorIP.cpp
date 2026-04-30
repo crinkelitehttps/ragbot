@@ -1,93 +1,71 @@
 #include "RerankGeneratorIP.h"
-#include <QNetworkRequest>
-#include <QNetworkReply>
-#include <QJsonDocument>
-#include <QJsonArray>
-#include <QTimer>
-#include <QEventLoop>
-#include <QDebug>
+#include "../compat/Logging.h"
+#include "../compat/Strings.h"
 #include "../ConfigKeys.h"
 
 
-//--------------------------------------------------------------------------------
-auto RerankGeneratorIP::runLoop(QNetworkReply* reply) -> bool
-{
-    QEventLoop loop;
-    QTimer timer;
-    timer.setSingleShot(true);
-    QObject::connect(reply,  &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timer, &QTimer::timeout,         &loop, &QEventLoop::quit);
-    timer.start(m_timeout);
-    loop.exec();
-    if (timer.isActive()) { timer.stop(); return true; }
-    reply->abort();
-    return false;
-}
-
-
-//--------------------------------------------------------------------------------
-RerankGeneratorIP::RerankGeneratorIP(const QJsonObject& config)
-    : m_modelName(config.value(ConfigKeys::ModelName).toString())
-    , m_timeout(config.value(ConfigKeys::Timeout).toInt(DefaultTimeout))
+RerankGeneratorIP::RerankGeneratorIP(const rb::Json& config)
+    : m_modelName(config.stringValue(ConfigKeys::ModelName))
+    , m_timeout(config.intValue(ConfigKeys::Timeout, DefaultTimeout))
     , m_isValid(false)
 {
-    m_basePath = config.value(ConfigKeys::BasePath).toString();
-    if (m_basePath.isEmpty()) {
-        const QString legacy = config.value(ConfigKeys::RemotePath).toString();
-        if (!legacy.isEmpty()) {
-            qWarning() << "RerankGeneratorIP: 'remotePath' is deprecated — use 'basePath'";
+    m_basePath = config.stringValue(ConfigKeys::BasePath);
+    if (rb::str_empty(m_basePath)) {
+        const rb::String legacy = config.stringValue(ConfigKeys::RemotePath);
+        if (!rb::str_empty(legacy)) {
+            RAGBOT_LOG_WARN("RerankGeneratorIP: 'remotePath' is deprecated — use 'basePath'");
             m_basePath = legacy;
         }
     }
-    m_isValid = !m_basePath.isEmpty();
+    m_isValid = !rb::str_empty(m_basePath);
     if (!m_isValid)
-        qWarning() << "RerankGeneratorIP: no basePath in config — disabled";
+        RAGBOT_LOG_WARN("RerankGeneratorIP: no basePath in config — disabled");
 }
 
 
-//--------------------------------------------------------------------------------
-auto RerankGeneratorIP::score(const QString& query, const QStringList& documents) -> QVector<float>
+auto RerankGeneratorIP::score(const rb::String& query,
+                              const rb::Vector<rb::String>& documents) -> rb::Vector<float>
 {
     if (!m_isValid) return {};
 
-    QJsonArray docs;
-    for (const auto& doc : documents) docs.append(doc);
+    rb::Json docs = rb::Json::array();
+    for (const auto& doc : documents) docs.append(rb::Json::fromString(doc));
 
-    const QJsonObject body{
-        {"model",            m_modelName},
-        {"query",            query},
-        {"documents",        docs},
-        {"return_documents", false}
+    rb::Json body = rb::Json::object();
+    body.setString("model",   m_modelName);
+    body.setString("query",   query);
+    body.set("documents",     docs);
+    body.setBool("return_documents", false);
+
+    const rb::HttpClient::HeaderList headers {
+        { rb::from_std("Content-Type"), rb::from_std("application/json") }
     };
+    const rb::Bytes bodyBytes = body.dump(true);
+    const rb::HttpClient::Response resp =
+        m_http.post(m_basePath + rb::from_std("v1/rerank"), headers, bodyBytes);
 
-    QNetworkRequest req(QUrl(m_basePath + "v1/rerank"));
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setTransferTimeout(m_timeout);
+    rb::Vector<float> scores(documents.size(), 0.0f);
 
-    QNetworkReply* reply = m_network.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
-
-    QVector<float> scores(documents.size(), 0.0f);
-    if (runLoop(reply)) {
-        if (reply->error() == QNetworkReply::NoError) {
-            const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
-            const QJsonArray results = doc.object()["results"].toArray();
-            if (results.isEmpty())
-                qWarning() << "RerankGeneratorIP::score(): empty results in response — returning zero scores";
-            else if (results.size() < documents.size())
-                qWarning() << "RerankGeneratorIP::score(): got" << results.size()
-                           << "results for" << documents.size() << "documents";
-            for (const auto& r : results) {
-                const QJsonObject obj = r.toObject();
-                const int idx = obj["index"].toInt(-1);
-                if (idx >= 0 && idx < scores.size())
-                    scores[idx] = static_cast<float>(obj["relevance_score"].toDouble());
-            }
-        } else {
-            qWarning() << "RerankGeneratorIP::score() network error:" << reply->errorString();
-        }
-    } else {
-        qWarning() << "RerankGeneratorIP::score() timed out after" << m_timeout << "ms";
+    if (!rb::str_empty(resp.error)) {
+        RAGBOT_LOG_WARN("RerankGeneratorIP::score() error: {}", rb::to_std(resp.error));
+        return scores;
     }
-    reply->deleteLater();
+
+    const rb::Json doc = rb::Json::parse(resp.body);
+    const rb::Json results = doc.value("results");
+    if (!results.isArray() || results.size() == 0) {
+        RAGBOT_LOG_WARN("RerankGeneratorIP::score(): empty results in response — returning zero scores");
+    } else if (results.size() < documents.size()) {
+        RAGBOT_LOG_WARN("RerankGeneratorIP::score(): got {} results for {} documents",
+                        static_cast<int>(results.size()), static_cast<int>(documents.size()));
+    }
+
+    for (const auto& r : results.items()) {
+        const int idx = r.intValue("index", -1);
+        if (idx >= 0 && static_cast<size_t>(idx) < scores.size())
+            scores[static_cast<size_t>(idx)] =
+                static_cast<float>(r.doubleValue("relevance_score"));
+    }
+
     return scores;
 }

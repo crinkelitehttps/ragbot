@@ -2,21 +2,19 @@
 #define RERANKER_H
 
 #include <memory>
-#include <QJsonObject>
+#include "../compat/Json.h"
 #include "../db/EmbeddingDatabase.h"
 #include "../generation/RerankGenerator.h"
 
 class Reranker
 {
 public:
-    explicit Reranker(const QJsonObject& config);
+    explicit Reranker(const rb::Json& config);
 
-    // Reranks results by relevance and returns the top-N.
-    // Returns results unchanged if disabled or generator is invalid.
     auto rerank(
-        const QString& query,
-        QVector<EmbeddingDatabase::SearchResult> results
-    ) -> QVector<EmbeddingDatabase::SearchResult>;
+        const rb::String& query,
+        rb::Vector<EmbeddingDatabase::SearchResult> results
+    ) -> rb::Vector<EmbeddingDatabase::SearchResult>;
 
     [[nodiscard]] auto isEnabled() const -> bool;
 

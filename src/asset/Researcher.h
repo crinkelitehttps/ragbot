@@ -2,8 +2,8 @@
 #define RESEARCHER_H
 
 #include <memory>
-#include <QJsonObject>
-#include <QString>
+#include "../compat/Json.h"
+#include "../compat/Types.h"
 #include "../ConversationTurn.h"
 #include "../db/EmbeddingDatabase.h"
 #include "../generation/TextGenerator.h"
@@ -11,18 +11,18 @@
 class Researcher
 {
 public:
-    explicit Researcher(const QJsonObject& config);
+    explicit Researcher(const rb::Json& config);
 
     auto research(
-        const QString& question,
-        const QVector<EmbeddingDatabase::SearchResult>& results,
-        const QVector<ConversationTurn>& history,
+        const rb::String& question,
+        const rb::Vector<EmbeddingDatabase::SearchResult>& results,
+        const rb::Vector<ConversationTurn>& history,
         const TextGenerator::TokenSink& tokenSink = {}
-    ) -> QString;
+    ) -> rb::String;
 
 private:
     std::unique_ptr<TextGenerator> m_generator;
-    QString                        m_instruction;
+    rb::String                     m_instruction;
 };
 
 #endif // RESEARCHER_H

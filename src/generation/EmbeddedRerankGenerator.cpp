@@ -1,5 +1,5 @@
 #include "EmbeddedRerankGenerator.h"
-#include <QDebug>
+#include "../compat/Logging.h"
 #include "llama.h"
 #include "common.h"
 #include "../ConfigKeys.h"
@@ -14,26 +14,25 @@ static void initLlamaBackend()
 }
 
 
-//--------------------------------------------------------------------------------
-EmbeddedRerankGenerator::EmbeddedRerankGenerator(const QJsonObject& config)
+EmbeddedRerankGenerator::EmbeddedRerankGenerator(const rb::Json& config)
 {
     initLlamaBackend();
 
     llama_log_set([](ggml_log_level level, const char* text, void*) {
         if (level == GGML_LOG_LEVEL_ERROR)
-            qCritical() << "llama.cpp:" << text;
+            RAGBOT_LOG_ERROR("llama.cpp: {}", text);
     }, nullptr);
 
-    const QString modelPath = config.value(ConfigKeys::ModelPath).toString();
-    if (modelPath.isEmpty()) {
-        qCritical() << "EmbeddedRerankGenerator: no modelPath in config";
+    const rb::String modelPath = config.stringValue(ConfigKeys::ModelPath);
+    if (rb::str_empty(modelPath)) {
+        RAGBOT_LOG_ERROR("EmbeddedRerankGenerator: no modelPath in config");
         return;
     }
 
-    m_model = llama_model_load_from_file(modelPath.toUtf8().constData(),
+    m_model = llama_model_load_from_file(rb::to_std(modelPath).c_str(),
                                          llama_model_default_params());
     if (!m_model) {
-        qCritical() << "EmbeddedRerankGenerator: failed to load model:" << modelPath;
+        RAGBOT_LOG_ERROR("EmbeddedRerankGenerator: failed to load model: {}", rb::to_std(modelPath));
         return;
     }
 
@@ -45,7 +44,7 @@ EmbeddedRerankGenerator::EmbeddedRerankGenerator(const QJsonObject& config)
 
     m_ctx = llama_init_from_model(m_model, ctx);
     if (!m_ctx) {
-        qCritical() << "EmbeddedRerankGenerator: failed to create context";
+        RAGBOT_LOG_ERROR("EmbeddedRerankGenerator: failed to create context");
         return;
     }
 
@@ -53,7 +52,6 @@ EmbeddedRerankGenerator::EmbeddedRerankGenerator(const QJsonObject& config)
 }
 
 
-//--------------------------------------------------------------------------------
 EmbeddedRerankGenerator::~EmbeddedRerankGenerator()
 {
     if (m_ctx)   { llama_free(m_ctx);        m_ctx   = nullptr; }
@@ -61,34 +59,31 @@ EmbeddedRerankGenerator::~EmbeddedRerankGenerator()
 }
 
 
-//--------------------------------------------------------------------------------
-auto EmbeddedRerankGenerator::scoreOne(const QString& query, const QString& doc) -> float
+auto EmbeddedRerankGenerator::scoreOne(const rb::String& query,
+                                       const rb::String& doc) -> float
 {
     const llama_vocab* vocab = llama_model_get_vocab(m_model);
-
-    // Use the model's built-in "rerank" chat template if available; otherwise
-    // fall back to joining query and document with EOS/SEP separator tokens.
     const char* tmpl = llama_model_chat_template(m_model, "rerank");
     std::string prompt;
     if (tmpl) {
         prompt = tmpl;
-        string_replace_all(prompt, "{query}",    query.toStdString());
-        string_replace_all(prompt, "{document}", doc.toStdString());
+        string_replace_all(prompt, "{query}",    rb::to_std(query));
+        string_replace_all(prompt, "{document}", rb::to_std(doc));
     } else {
-        prompt = query.toStdString();
+        prompt = rb::to_std(query);
         if (llama_vocab_get_add_eos(vocab))
             prompt += llama_vocab_get_text(vocab, llama_vocab_eos(vocab));
         if (llama_vocab_get_add_sep(vocab))
             prompt += llama_vocab_get_text(vocab, llama_vocab_sep(vocab));
-        prompt += doc.toStdString();
+        prompt += rb::to_std(doc);
     }
 
     auto vtok = common_tokenize(m_ctx, prompt, true, true);
 
     const int limit = static_cast<int>(llama_n_ubatch(m_ctx));
     if (static_cast<int>(vtok.size()) > limit) {
-        qWarning() << "EmbeddedRerankGenerator: truncating tokens from"
-                   << vtok.size() << "to" << limit;
+        RAGBOT_LOG_WARN("EmbeddedRerankGenerator: truncating tokens from {} to {}",
+                        static_cast<int>(vtok.size()), limit);
         vtok.resize(static_cast<size_t>(limit));
     }
 
@@ -103,7 +98,7 @@ auto EmbeddedRerankGenerator::scoreOne(const QString& query, const QString& doc)
         const float* emb = llama_get_embeddings_seq(m_ctx, 0);
         if (emb) result = emb[0];
     } else {
-        qWarning() << "EmbeddedRerankGenerator: llama_decode failed";
+        RAGBOT_LOG_WARN("EmbeddedRerankGenerator: llama_decode failed");
     }
 
     llama_batch_free(batch);
@@ -111,15 +106,15 @@ auto EmbeddedRerankGenerator::scoreOne(const QString& query, const QString& doc)
 }
 
 
-//--------------------------------------------------------------------------------
-auto EmbeddedRerankGenerator::score(const QString& query, const QStringList& documents) -> QVector<float>
+auto EmbeddedRerankGenerator::score(const rb::String& query,
+                                    const rb::Vector<rb::String>& documents) -> rb::Vector<float>
 {
     if (!m_isValid) return {};
 
-    QVector<float> scores;
+    rb::Vector<float> scores;
     scores.reserve(documents.size());
     for (const auto& doc : documents)
-        scores.append(scoreOne(query, doc));
+        scores.push_back(scoreOne(query, doc));
 
     return scores;
 }
