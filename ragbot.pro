@@ -98,4 +98,6 @@ library {
     CONFIG += staticlib
     CONFIG -= console
     SOURCES -= src/main.cpp
+    SOURCES += src/ragbot_c_api.cpp
+    HEADERS += src/ragbot_c_api.h
 }

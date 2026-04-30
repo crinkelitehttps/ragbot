@@ -119,7 +119,17 @@ Add `assetsDir` to the config schema (or pass via `RAGBotSession` constructor). 
 
 ---
 
-## Phase 3 — C ABI wrapper
+## Phase 3 — C ABI wrapper ✅ DONE
+
+### What was done
+
+- `src/ragbot_c_api.h` — pure C header (zero Qt symbols, verified with grep). Opaque `ragbot_session*` handle, callback typedefs, and the full API surface: `ragbot_create` / `ragbot_destroy`, `ragbot_set_npc_context` / `ragbot_set_world_context` (sticky per session), `ragbot_ask` (async, returns immediately), `ragbot_ask_blocking` (blocking, writes into caller buffer), `ragbot_set_log_callback`.
+- `src/ragbot_c_api.cpp` — thin C++ translation layer. `ragbot_session` struct holds the `RAGBotSession*`, NPC/world context strings (protected by a mutex), and an `std::thread` + `std::atomic<bool>` for async dispatch.
+- NPC/world context is prepended to each question as `[NPC context: ...]` / `[World context: ...]` blocks — no changes to `RAGBotSession` required.
+- `ragbot_set_log_callback` wires a C callback through the new `rb::install_log_callback()` hook added to `src/compat/Logging.h/.cpp`. In Qt mode the hook installs a `qInstallMessageHandler`; in non-Qt mode it patches `rb::log_message` directly.
+- `CMakeLists.txt`: `ragbot_c_api.cpp` added to `RAGBOT_LIB_SOURCES` (both LIBRARY=ON and LIBRARY=OFF builds include it).
+- `ragbot.pro`: `ragbot_c_api.cpp` / `.h` added to the `library {}` block.
+- Verified: `libragbot.a` builds cleanly (CMake, RAGBOT_USE_QT=ON, RAGBOT_LIBRARY=ON); CLI binary unaffected.
 
 This is what CDDA actually links against. The wrapper is a thin file (`src/ragbot_c_api.h` + `src/ragbot_c_api.cpp`) — no logic, just translation.
 
