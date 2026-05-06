@@ -179,3 +179,64 @@ clang-tidy -p ../build-ragbot src/RAGBot.cpp
 `inputs/` (relative to working directory at runtime, i.e. `../build-ragbot/inputs/`):
 - `roleplayPrompt.txt` — `%1` character name, `%2` research answer, `%3` question
 - `survivorPrompt.txt`, `characterBackground.txt` — character context
+
+## Library Build
+
+RAGBot can be consumed as a static library (`libragbot.a`) by a host application (e.g. CDDA). The public surface is a pure C header with zero Qt symbols: `src/ragbot_c_api.h`.
+
+### Building with CMake
+
+```bash
+# Qt build, network-only inference (recommended for integration)
+cmake -B ../build-ragbot-lib -S . \
+    -DRAGBOT_LIBRARY=ON \
+    -DRAGBOT_USE_QT=ON
+cmake --build ../build-ragbot-lib -j$(nproc)
+
+# Qt build + embedded llama.cpp inference
+cmake -B ../build-ragbot-lib -S . \
+    -DRAGBOT_LIBRARY=ON \
+    -DRAGBOT_USE_QT=ON \
+    -DRAGBOT_EMBEDDED_INFERENCE=ON
+cmake --build ../build-ragbot-lib -j$(nproc)
+
+# Qt-free build (libcurl + nlohmann/json + {fmt} fetched automatically)
+cmake -B ../build-ragbot-lib -S . \
+    -DRAGBOT_LIBRARY=ON \
+    -DRAGBOT_USE_QT=OFF
+cmake --build ../build-ragbot-lib -j$(nproc)
+```
+
+### Building with qmake (embedded inference only)
+
+```bash
+./b-lib.sh    # outputs libragbot.a to ../build-ragbot-lib/
+```
+
+### Linking
+
+```bash
+g++ my_app.cpp -o my_app \
+    -I path/to/ragbot/src \
+    path/to/libragbot.a \
+    -lQt5Core -lQt5Network -lsqlite3 -lpthread -ldl -lm -lstdc++
+# Embedded inference: also add -lcommon -lllama -lggml* -lopenblas -lgomp -lvulkan
+```
+
+> **Qt version constraint:** the library must be linked with Qt 5.15.2 from `/home/joe/Qt/5.15.2/gcc_64`. The system Qt (5.15.18) causes a runtime crash. If the host application already links Qt, it must use a compatible build or arrange ABI isolation.
+
+### API quick reference
+
+| Function | Description |
+|----------|-------------|
+| `ragbot_set_log_callback(cb, user)` | Install log sink before `ragbot_create`; not thread-safe |
+| `ragbot_create(config_json, assets_dir)` | Parse config, init pipeline; returns `NULL` on failure |
+| `ragbot_destroy(session)` | Joins worker thread; blocks until any in-flight ask completes |
+| `ragbot_set_npc_context(session, json)` | Sticky NPC context prepended to every question; thread-safe |
+| `ragbot_set_world_context(session, json)` | Sticky world context prepended to every question; thread-safe |
+| `ragbot_ask(session, q, on_token, on_done, user)` | Async ask; returns immediately; callbacks fire on worker thread |
+| `ragbot_ask_blocking(session, q, buf, size)` | Blocking ask; returns full answer byte-length |
+
+**Threading rule:** `on_token` and `on_done` callbacks fire on the ragbot internal worker thread. Marshal to your UI thread before touching UI state. Do not call `ragbot_ask` again from within `on_done`.
+
+See `library-api.md` for the full API reference, JSON schemas for NPC/world context, and a minimal C example.
