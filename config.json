@@ -13,8 +13,8 @@
     "topK": 10,
     "similarityThreshold": 0.0,
     "generator": {
-      "backend": "embedded",
-      "modelPath": "/home/joe/gguf/nomic-embed-text-v1.5.f32.gguf"
+      "backend": "network",
+      "basePath": "http://220.82.52.202:50653/"
     }
   },
   "researcher": {
