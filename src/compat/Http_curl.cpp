@@ -15,7 +15,10 @@ struct HttpClient::Impl
     {
         static bool once = false;
         if (!once) { curl_global_init(CURL_GLOBAL_DEFAULT); once = true; }
+        handle = curl_easy_init();
     }
+    ~Impl() { if (handle) curl_easy_cleanup(handle); }
+    CURL* handle { nullptr };
 };
 
 HttpClient::HttpClient()  : m_impl(std::make_unique<Impl>()) {}
@@ -58,14 +61,13 @@ static curl_slist* buildHeaders(const HttpClient::HeaderList& headers)
     return list;
 }
 
-static CURL* makeEasy(const String& url,
-                      const HttpClient::HeaderList& headers,
-                      const Bytes& body,
-                      curl_slist** outHeaders)
+static void prepareHandle(CURL* curl,
+                           const String& url,
+                           const HttpClient::HeaderList& headers,
+                           const Bytes& body,
+                           curl_slist** outHeaders)
 {
-    CURL* curl = curl_easy_init();
-    if (!curl) return nullptr;
-
+    curl_easy_reset(curl);
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
@@ -76,8 +78,6 @@ static CURL* makeEasy(const String& url,
     *outHeaders = buildHeaders(headers);
     if (*outHeaders)
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, *outHeaders);
-
-    return curl;
 }
 
 // ─── public API ─────────────────────────────────────────────────────────────
@@ -86,11 +86,12 @@ auto HttpClient::post(const String& url,
                       const HeaderList& headers,
                       const Bytes& body) -> Response
 {
-    curl_slist* hdrs = nullptr;
-    CURL* curl = makeEasy(url, headers, body, &hdrs);
+    CURL* curl = m_impl->handle;
     Response r;
     if (!curl) { r.error = "curl_easy_init failed"; return r; }
 
+    curl_slist* hdrs = nullptr;
+    prepareHandle(curl, url, headers, body, &hdrs);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeToBytes);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &r.body);
 
@@ -104,7 +105,6 @@ auto HttpClient::post(const String& url,
     }
 
     curl_slist_free_all(hdrs);
-    curl_easy_cleanup(curl);
     return r;
 }
 
@@ -113,11 +113,12 @@ auto HttpClient::postStreaming(const String& url,
                                const Bytes& body,
                                const ChunkSink& sink) -> Response
 {
-    curl_slist* hdrs = nullptr;
-    CURL* curl = makeEasy(url, headers, body, &hdrs);
+    CURL* curl = m_impl->handle;
     Response r;
     if (!curl) { r.error = "curl_easy_init failed"; return r; }
 
+    curl_slist* hdrs = nullptr;
+    prepareHandle(curl, url, headers, body, &hdrs);
     StreamCtx ctx { sink };
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeToSink);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
@@ -132,7 +133,6 @@ auto HttpClient::postStreaming(const String& url,
     }
 
     curl_slist_free_all(hdrs);
-    curl_easy_cleanup(curl);
     return r;
 }
 

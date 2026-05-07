@@ -131,21 +131,36 @@ auto Embedder::fileEmbed(const rb::String& path) -> bool
         objects.push_back(doc);
     }
 
-    int added = 0;
+    struct PendingChunk { rb::String embedText; rb::String content; };
+    rb::Vector<PendingChunk> pending;
     for (const rb::Json& raw : objects) {
         if (raw.boolValue("abstract", false)) continue;
-
         const rb::Json resolved = CDDAResolver::resolve(raw, m_registry);
         const Parser::Chunk chunk = m_parser->objectToChunk(resolved);
+        pending.push_back({ rb::from_std("search_document: ") + chunk.embedText, chunk.content });
+    }
 
-        const rb::Vector<float> embedding =
-            m_generator->generate(rb::from_std("search_document: ") + chunk.embedText);
-        if (embedding.empty()) {
+    rb::Vector<rb::String> inputs;
+    inputs.reserve(pending.size());
+    for (const auto& pchunk : pending)
+        inputs.push_back(pchunk.embedText);
+
+    const rb::Vector<rb::Vector<float>> embeddings = m_generator->generateBatch(inputs);
+    if (embeddings.size() != pending.size()) {
+        RAGBOT_LOG_WARN("Embedder::fileEmbed(): batch embedding failed — aborting file");
+        m_db.rollbackFileTransaction();
+        return false;
+    }
+
+    int added = 0;
+    const auto chunkCount = static_cast<int>(pending.size());
+    for (int idx = 0; idx < chunkCount; ++idx) {
+        if (embeddings[idx].empty()) {
             RAGBOT_LOG_WARN("Embedder::fileEmbed(): empty embedding for chunk — aborting file");
             m_db.rollbackFileTransaction();
             return false;
         }
-        if (m_db.embeddingSave(sourceId, embedding, chunk.content)) ++added;
+        if (m_db.embeddingSave(sourceId, embeddings[idx], pending[idx].content)) ++added;
     }
 
     if (!m_db.commitFileTransaction()) {
