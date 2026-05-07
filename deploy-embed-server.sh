@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# Rent a vast.ai GPU instance, run ragbot-embedserver, and write config-vast.json.
+# Usage: ./deploy-embed-server.sh [--api-key KEY] [--max-price 0.30] [--gpu-ram 8]
+set -euo pipefail
+
+VAST="python3 /home/joe/source/vast-cli/vast.py"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STATE_FILE="$SCRIPT_DIR/.vast-instance-id"
+CONFIG_OUT="$SCRIPT_DIR/config-vast.json"
+IMAGE="crinkelite/ragbot-embedserver:latest"
+MODEL_URL="https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q8_0.gguf"
+CONTAINER_PORT=8080
+POLL_INTERVAL=15
+POLL_TIMEOUT=300
+
+API_KEY="${VASTAI_API_KEY:-}"
+MAX_PRICE="0.30"
+MIN_GPU_RAM="8"
+YES=0
+
+usage() {
+    echo "Usage: $0 [--api-key KEY] [--max-price DOLLARS_PER_HR] [--gpu-ram GB] [--yes]"
+    echo "  --api-key     vast.ai API key (default: \$VASTAI_API_KEY)"
+    echo "  --max-price   maximum price in \$/hr (default: $MAX_PRICE)"
+    echo "  --gpu-ram     minimum GPU VRAM in GB (default: $MIN_GPU_RAM)"
+    echo "  --yes         skip confirmation prompt"
+    exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --api-key) API_KEY="$2"; shift 2 ;;
+        --max-price) MAX_PRICE="$2"; shift 2 ;;
+        --gpu-ram) MIN_GPU_RAM="$2"; shift 2 ;;
+        --yes|-y) YES=1; shift ;;
+        -h|--help) usage ;;
+        *) echo "Unknown argument: $1"; usage ;;
+    esac
+done
+
+KEY_ARG=""
+[[ -n "$API_KEY" ]] && KEY_ARG="--api-key $API_KEY"
+
+vast() { $VAST $KEY_ARG "$@"; }
+vast_raw() { $VAST $KEY_ARG --raw "$@"; }
+
+# ── 1. Find cheapest suitable offer ──────────────────────────────────────────
+echo "Searching for offers (CUDA >= 12.4, VRAM >= ${MIN_GPU_RAM} GB, <= \$${MAX_PRICE}/hr)..."
+
+OFFERS_JSON=$(vast_raw search offers \
+    "cuda_vers >= 12.4 gpu_ram >= ${MIN_GPU_RAM} dph_total <= ${MAX_PRICE}" \
+    --order dph_total --limit 5 --type on-demand 2>&1)
+
+OFFER_COUNT=$(echo "$OFFERS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d))" 2>/dev/null || echo 0)
+
+if [[ "$OFFER_COUNT" -eq 0 ]]; then
+    echo "No offers found matching criteria. Try raising --max-price or lowering --gpu-ram."
+    exit 1
+fi
+
+echo ""
+echo "Top offers:"
+echo "$OFFERS_JSON" | python3 -c "
+import json, sys
+offers = json.load(sys.stdin)
+print(f\"  {'ID':>10}  {'GPU':<22}  {'VRAM':>6}  {'\$/hr':>6}  {'CUDA':>5}  Country\")
+print(f\"  {'-'*10}  {'-'*22}  {'-'*6}  {'-'*6}  {'-'*5}  -------\")
+for o in offers:
+    vram_gb = o.get('gpu_ram', 0) / 1024
+    print(f\"  {o['id']:>10}  {o.get('gpu_name','?'):<22}  {vram_gb:>5.0f}G  {o.get('dph_total',0):>6.4f}  {o.get('cuda_max_good',0):>5.1f}  {o.get('geolocation','?')}\")
+"
+echo ""
+
+OFFER_ID=$(echo "$OFFERS_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
+OFFER_INFO=$(echo "$OFFERS_JSON" | python3 -c "
+import json,sys
+o=json.load(sys.stdin)[0]
+print(f\"{o.get('gpu_name','?')} @ \${o.get('dph_total',0):.4f}/hr (CUDA {o.get('cuda_max_good','?')}, {o.get('gpu_ram',0):.0f} GB VRAM)\")
+")
+
+echo "Selected offer $OFFER_ID: $OFFER_INFO"
+if [[ $YES -eq 0 ]]; then
+    read -r -p "Proceed? [y/N] " CONFIRM
+    [[ "$CONFIRM" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
+fi
+
+# ── 2. Create instance ────────────────────────────────────────────────────────
+echo ""
+echo "Creating instance..."
+CREATE_OUT=$(vast_raw create instance "$OFFER_ID" \
+    --image "$IMAGE" \
+    --env "-e MODEL_URL=$MODEL_URL -p ${CONTAINER_PORT}:${CONTAINER_PORT}" \
+    --disk 10 \
+    --args 2>&1)
+
+INSTANCE_ID=$(echo "$CREATE_OUT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['new_contract'])" 2>/dev/null || true)
+if [[ -z "$INSTANCE_ID" ]]; then
+    echo "Failed to create instance. Response:"
+    echo "$CREATE_OUT"
+    exit 1
+fi
+
+echo "$INSTANCE_ID" > "$STATE_FILE"
+echo "Instance $INSTANCE_ID created. State saved to $STATE_FILE"
+
+# ── 3. Poll until running ─────────────────────────────────────────────────────
+echo ""
+echo "Waiting for instance to reach 'running' status (timeout ${POLL_TIMEOUT}s)..."
+ELAPSED=0
+while true; do
+    INST_JSON=$(vast_raw show instance "$INSTANCE_ID" 2>/dev/null || echo "{}")
+    STATUS=$(echo "$INST_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('actual_status','unknown'))" 2>/dev/null || echo "unknown")
+
+    printf "\r  [%3ds] status: %-15s" "$ELAPSED" "$STATUS"
+
+    if [[ "$STATUS" == "running" ]]; then
+        echo ""
+        break
+    fi
+
+    if [[ $ELAPSED -ge $POLL_TIMEOUT ]]; then
+        echo ""
+        echo "Timed out waiting for instance to start. Check https://cloud.vast.ai/instances/"
+        echo "Instance ID: $INSTANCE_ID"
+        exit 1
+    fi
+
+    sleep $POLL_INTERVAL
+    ELAPSED=$((ELAPSED + POLL_INTERVAL))
+done
+
+# ── 4. Extract public address ─────────────────────────────────────────────────
+INST_JSON=$(vast_raw show instance "$INSTANCE_ID" 2>/dev/null)
+
+HOST=$(echo "$INST_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('public_ipaddr') or d.get('ssh_host',''))")
+MAPPED_PORT=$(echo "$INST_JSON" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+ports = d.get('ports') or {}
+key = '${CONTAINER_PORT}/tcp'
+entries = ports.get(key, [])
+if entries:
+    print(entries[0]['HostPort'])
+else:
+    print('')
+" 2>/dev/null || true)
+SSH_HOST=$(echo "$INST_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('ssh_host',''))" 2>/dev/null || true)
+SSH_PORT=$(echo "$INST_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('ssh_port',''))" 2>/dev/null || true)
+
+if [[ -z "$HOST" || -z "$MAPPED_PORT" ]]; then
+    echo "Instance is running but port mapping not yet available. Raw instance info:"
+    echo "$INST_JSON" | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin), indent=2))" 2>/dev/null || echo "$INST_JSON"
+    echo ""
+    echo "Check https://cloud.vast.ai/instances/ for the mapped port, then update config-vast.json manually."
+    exit 1
+fi
+
+BASE_PATH="http://${HOST}:${MAPPED_PORT}/"
+echo "Endpoint: $BASE_PATH"
+
+# ── 5. Write config-vast.json ─────────────────────────────────────────────────
+# Read embedder.files and embedder.name from main config.json as defaults
+FILES_PATH=$(python3 -c "import json; c=json.load(open('$SCRIPT_DIR/config.json')); print(c.get('embedder',{}).get('files',''))" 2>/dev/null || echo "")
+DB_NAME=$(python3 -c "import json; c=json.load(open('$SCRIPT_DIR/config.json')); print(c.get('embedder',{}).get('name','embeddings.db'))" 2>/dev/null || echo "embeddings.db")
+
+python3 - <<PYEOF
+import json
+
+config = {
+    "reranker": {"enabled": False},
+    "embedder": {
+        "name": "$DB_NAME",
+        "files": "$FILES_PATH",
+        "generator": {
+            "backend": "network",
+            "basePath": "$BASE_PATH"
+        }
+    },
+    "researcher": {
+        "generator": {"backend": "network", "basePath": ""}
+    },
+    "roleplayer": {
+        "enabled": False,
+        "generator": {"backend": "network", "basePath": ""}
+    }
+}
+
+with open("$CONFIG_OUT", "w") as f:
+    json.dump(config, f, indent=2)
+    f.write("\n")
+
+print(f"Wrote $CONFIG_OUT")
+PYEOF
+
+echo ""
+echo "Done. To index:"
+echo "  ../build-ragbot/ragbot --load --config $CONFIG_OUT"
+echo ""
+if [[ -n "$SSH_HOST" && -n "$SSH_PORT" ]]; then
+    echo "To SSH into the instance:"
+    echo "  ssh -p $SSH_PORT root@$SSH_HOST"
+    echo ""
+fi
+echo "To tear down when finished:"
+echo "  ./teardown-embed-server.sh"
