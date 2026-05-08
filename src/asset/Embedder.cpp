@@ -6,9 +6,6 @@
 #include "../compat/Strings.h"
 #include "../compat/Io.h"
 #include "../compat/Sha.h"
-#ifdef RAGBOT_USE_QT
-#include "../parsers/ManPageResolver.h"
-#endif
 
 namespace {
 
@@ -30,7 +27,6 @@ struct FileSlot {
 Embedder::Embedder(const rb::Json& config)
     : m_db(config)
     , m_generator(GeneratorFactory::createEmbedding(config.value(ConfigKeys::Generator)))
-    , m_parserType(config.stringValue(ConfigKeys::ParserType, ConfigKeys::ParserCddaJson))
     , m_topK(config.intValue(ConfigKeys::TopK, 10))
     , m_similarityThreshold(static_cast<float>(config.doubleValue(ConfigKeys::SimilarityThreshold, 0.0)))
 {
@@ -56,8 +52,7 @@ Embedder::Embedder(const rb::Json& config)
     if (config.boolValue(ConfigKeys::SkipIndex, false)) {
         RAGBOT_LOG_INFO("Embedder: skipping index pass (-s flag)");
     } else {
-        if (m_parserType == ConfigKeys::ParserCddaJson)
-            m_parser = std::make_unique<ParserJSON>();
+        m_parser = std::make_unique<ParserJSON>();
         processAllFiles();
     }
 }
@@ -67,25 +62,13 @@ void Embedder::processAllFiles()
 {
     rb::Vector<rb::String> paths;
 
-#ifdef RAGBOT_USE_QT
-    if (m_parserType == ConfigKeys::ParserManPage) {
-        QStringList qtFiles;
-        for (const auto& f : m_files) qtFiles << f;
-        const QStringList discovered = ManPageResolver::discover(qtFiles);
-        for (const auto& p : discovered) paths.push_back(p);
-        RAGBOT_LOG_INFO("Embedder::processAllFiles(): {} man page files across {} directories",
-                        static_cast<int>(paths.size()), static_cast<int>(m_files.size()));
-    } else
-#endif
-    {
-        for (const rb::String& dir : m_files) {
-            const auto dirPaths = rb::iter_files_recursive(dir, rb::from_std(".json"));
-            for (const auto& p : dirPaths) paths.push_back(p);
-        }
-        RAGBOT_LOG_INFO("Embedder::processAllFiles(): {} JSON files across {} directories",
-                        static_cast<int>(paths.size()), static_cast<int>(m_files.size()));
-        m_registry = CDDAResolver::buildRegistryFromFiles(paths);
+    for (const rb::String& dir : m_files) {
+        const auto dirPaths = rb::iter_files_recursive(dir, rb::from_std(".json"));
+        for (const auto& p : dirPaths) paths.push_back(p);
     }
+    RAGBOT_LOG_INFO("Embedder::processAllFiles(): {} JSON files across {} directories",
+                    static_cast<int>(paths.size()), static_cast<int>(m_files.size()));
+    m_registry = CDDAResolver::buildRegistryFromFiles(paths);
 
     const int total = static_cast<int>(paths.size());
 
@@ -97,21 +80,9 @@ void Embedder::processAllFiles()
     int indexed = 0;
     int skipped = 0;
 
-#ifdef RAGBOT_USE_QT
-    if (m_parserType == ConfigKeys::ParserManPage) {
-        int progress = 0;
-        for (const rb::String& path : paths) {
-            const rb::String fname = rb::path_filename(path);
-            RAGBOT_LOG_INFO("[{}/{}] {}", ++progress, total, rb::to_std(fname));
-            if (fileEmbedManPage(path)) ++indexed; else ++skipped;
-        }
-    } else
-#endif
-    {
-        const auto counts = processJsonFiles(paths);
-        indexed = counts.first;
-        skipped = counts.second;
-    }
+    const auto counts = processJsonFiles(paths);
+    indexed = counts.first;
+    skipped = counts.second;
 
     if (!m_db.commitBatch()) {
         RAGBOT_LOG_WARN("Embedder::processAllFiles(): batch commit failed — re-index required");
@@ -243,61 +214,6 @@ auto Embedder::processJsonFiles(const rb::Vector<rb::String>& paths) -> std::pai
     }
 
     return { indexed, skipped };
-}
-
-
-auto Embedder::fileEmbedManPage(const rb::String& path) -> bool
-{
-#ifdef RAGBOT_USE_QT
-    bool readOk = false;
-    const rb::Bytes fileData = rb::read_file_bytes(path, &readOk);
-    if (!readOk) {
-        RAGBOT_LOG_WARN("Embedder::fileEmbedManPage(): cannot open {}", rb::to_std(path));
-        return false;
-    }
-
-    const rb::String hexHash = rb::sha256_hex(fileData);
-    m_db.beginFileTransaction();
-
-    const int sourceId = m_db.newSourceFileId(hexHash, path);
-    if (sourceId < 0) {
-        m_db.rollbackFileTransaction();
-        return false;
-    }
-
-    const QVector<Parser::Chunk> chunks = ManPageResolver::fileToChunks(path);
-    if (chunks.isEmpty()) {
-        RAGBOT_LOG_WARN("Embedder::fileEmbedManPage(): no chunks produced for {}", rb::to_std(path));
-        m_db.rollbackFileTransaction();
-        return false;
-    }
-
-    int added = 0;
-    for (const Parser::Chunk& chunk : chunks) {
-        const rb::Vector<float> embedding =
-            m_generator->generate(rb::from_std("search_document: ") + chunk.embedText);
-        if (embedding.empty()) {
-            RAGBOT_LOG_WARN("Embedder::fileEmbedManPage(): empty embedding — aborting file");
-            m_db.rollbackFileTransaction();
-            return false;
-        }
-        if (m_db.embeddingSave(sourceId, embedding, chunk.content)) ++added;
-    }
-
-    if (!m_db.commitFileTransaction()) {
-        RAGBOT_LOG_WARN("Embedder::fileEmbedManPage(): commit failed — {}",
-                        rb::to_std(rb::path_filename(path)));
-        m_db.rollbackFileTransaction();
-        return false;
-    }
-
-    RAGBOT_LOG_INFO("Embedder::fileEmbedManPage(): indexed {} chunks from {}",
-                    added, rb::to_std(rb::path_filename(path)));
-    return true;
-#else
-    (void)path;
-    return false;
-#endif
 }
 
 

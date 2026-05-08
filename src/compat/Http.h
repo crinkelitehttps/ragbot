@@ -10,9 +10,7 @@
 
 namespace rb {
 
-// Backend-agnostic HTTP client.
-// Http_qt.cpp implements using QNetworkAccessManager (RAGBOT_USE_QT builds).
-// Http_curl.cpp implements using libcurl (non-Qt builds).
+// HTTP client backed by libcurl (Http_curl.cpp).
 class HttpClient
 {
 public:

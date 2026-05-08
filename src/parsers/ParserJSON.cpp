@@ -47,11 +47,11 @@ auto ParserJSON::stringifyObject(const rb::Json& obj) -> rb::String
     // dropping the entire sub-batch.
     static constexpr int MaxEmbedChars { 6000 };
     if (static_cast<int>(out.size()) > MaxEmbedChars) {
-#ifdef RAGBOT_USE_QT
-        out = out.left(MaxEmbedChars);
-#else
-        out = out.substr(0, static_cast<size_t>(MaxEmbedChars));
-#endif
+        // Walk back to a UTF-8 character boundary so we don't split a multi-byte sequence.
+        size_t pos = static_cast<size_t>(MaxEmbedChars);
+        while (pos > 0 && (static_cast<unsigned char>(out[pos]) & 0xC0) == 0x80)
+            --pos;
+        out = out.substr(0, pos);
     }
     return out;
 }
@@ -75,13 +75,8 @@ auto ParserJSON::extractTextRecursive(
             } else {
                 // Replace underscores with spaces in the key portion, then append the value
                 rb::String keyNorm = fullKey;
-#ifdef RAGBOT_USE_QT
-                keyNorm = keyNorm.replace('_', ' ');
-                texts.push_back(keyNorm + rb::from_std(" is ") + val.toString());
-#else
                 for (char& ch : keyNorm) if (ch == '_') ch = ' ';
                 texts.push_back(keyNorm + rb::from_std(" is ") + val.toString());
-#endif
             }
         }
     } else if (value.isArray()) {
@@ -92,11 +87,7 @@ auto ParserJSON::extractTextRecursive(
         }
         if (!items.empty()) {
             rb::String keyNorm = prefix;
-#ifdef RAGBOT_USE_QT
-            keyNorm = keyNorm.replace('_', ' ');
-#else
             for (char& ch : keyNorm) if (ch == '_') ch = ' ';
-#endif
             rb::String joined = keyNorm + rb::from_std(" includes: ");
             for (size_t i = 0; i < items.size(); ++i) {
                 if (i > 0) joined += rb::from_std(", ");

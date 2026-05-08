@@ -46,11 +46,7 @@ auto EmbeddingDatabase::exec(const char* sql) -> bool
 
 void EmbeddingDatabase::initialize(const rb::String& dbName)
 {
-#ifdef RAGBOT_USE_QT
-    const int rc = sqlite3_open(dbName.toUtf8().constData(), &m_db);
-#else
     const int rc = sqlite3_open(dbName.c_str(), &m_db);
-#endif
     if (rc != SQLITE_OK) {
         RAGBOT_LOG_ERROR("EmbeddingDatabase: cannot open {} — {}",
                          rb::to_std(dbName), sqlite3_errmsg(m_db));
@@ -149,13 +145,8 @@ auto EmbeddingDatabase::newSourceFileId(
 {
     if (!m_db) return -1;
 
-#ifdef RAGBOT_USE_QT
-    const std::string checksumStd = contentChecksum.toStdString();
-    const std::string fileStd     = file.toStdString();
-#else
     const std::string& checksumStd = contentChecksum;
     const std::string& fileStd     = file;
-#endif
 
     sqlite3_stmt* stmt = nullptr;
     sqlite3_prepare_v2(m_db,
@@ -192,11 +183,7 @@ auto EmbeddingDatabase::sourceFileExists(const rb::String& contentChecksum) -> b
 {
     if (!m_db) return false;
 
-#ifdef RAGBOT_USE_QT
-    const std::string checksumStd = contentChecksum.toStdString();
-#else
     const std::string& checksumStd = contentChecksum;
-#endif
 
     sqlite3_stmt* stmt = nullptr;
     sqlite3_prepare_v2(m_db,
@@ -232,11 +219,7 @@ auto EmbeddingDatabase::embeddingSave(
 
     const int blobSize = static_cast<int>(normalized.size()) * static_cast<int>(sizeof(float));
 
-#ifdef RAGBOT_USE_QT
-    const std::string contentStd = chunkContent.toStdString();
-#else
     const std::string& contentStd = chunkContent;
-#endif
 
     sqlite3_stmt* stmt = nullptr;
     sqlite3_prepare_v2(m_db,

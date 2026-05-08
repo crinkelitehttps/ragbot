@@ -54,11 +54,7 @@ auto Roleplayer::respond(
 
     if (!tokenSink) {
         std::fputc('\n', stdout);
-#ifdef RAGBOT_USE_QT
-        std::fputs(m_characterName.toStdString().c_str(), stdout);
-#else
         std::fputs(m_characterName.c_str(), stdout);
-#endif
         std::fputs(": ", stdout);
         std::fflush(stdout);
     }

@@ -1,21 +1,14 @@
 #include "Sha.h"
 #include "Io.h"
-#include "Strings.h"
 
-#ifdef RAGBOT_USE_QT
-#include <QCryptographicHash>
-#else
 #include <array>
 #include <cstdint>
 #include <cstring>
-#endif
 
 namespace rb {
 
-#ifndef RAGBOT_USE_QT
 // ---------------------------------------------------------------------------
-// Tiny SHA-256 (FIPS 180-4) — used only in the Qt-less build.
-// Public-domain-style reference implementation; ~120 lines, no external deps.
+// Tiny SHA-256 (FIPS 180-4). ~120 lines, no external deps.
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -104,16 +97,11 @@ std::string to_hex(const std::array<uint8_t, 32>& digest)
 }
 
 }  // namespace
-#endif
 
 auto sha256_hex(const Bytes& data) -> String
 {
-#ifdef RAGBOT_USE_QT
-    return QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
-#else
     auto raw = sha256_raw(data.data(), data.size());
     return to_hex(raw);
-#endif
 }
 
 auto sha256_file_hex(const String& path) -> String

@@ -1,98 +1,89 @@
-#include <QCoreApplication>
-#include <QCommandLineParser>
-#include <QDir>
-#include <QFile>
-#include <QDebug>
-#include <QJsonDocument>
-#include <QJsonObject>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 
 #include "RAGBot.h"
 #include "RAGBotSession.h"
 #include "ConfigKeys.h"
 #include "compat/Json.h"
+#include "compat/Logging.h"
+#include "compat/Strings.h"
+#include "compat/Types.h"
 
-auto main(int argc, char *argv[]) -> int
+static void print_help(const char* prog)
 {
-    // Prevent Qt Network's bearer management from loading system Qt DBus libs,
-    // which would conflict with this binary's Qt 5.15.2 build.
-    qputenv("QT_BEARER_POLL_TIMEOUT", "2147483647");
+    std::cout <<
+        "Usage: " << prog << " [options]\n"
+        "  -c, --config <file>   Config JSON (default: config.json)\n"
+        "  -d, --data   <dir>    Data directory — overrides embedder.files\n"
+        "  -b, --db     <file>   Embeddings database path\n"
+        "  -l, --load            Index only, then exit\n"
+        "  -s, --skip-index      Skip indexing, go straight to chat\n"
+        "  -h, --help            Show this help\n";
+}
 
-    QCoreApplication app(argc, argv);
-    QCoreApplication::setApplicationName("ragbot");
+auto main(int argc, char* argv[]) -> int
+{
+    std::string configPath;
+    std::string dataOverride;
+    std::string dbOverride;
+    bool        loadOnly  = false;
+    bool        skipIndex = false;
 
-    QCommandLineParser cli;
-    cli.setApplicationDescription("RAG chatbot for Cataclysm: Dark Days Ahead data");
-    cli.addHelpOption();
-
-    const QCommandLineOption configOpt(
-        {"c", "config"},
-        "Path to config JSON file (default: config.json in working directory).",
-        "file", "config.json");
-
-    const QCommandLineOption dataOpt(
-        {"d", "data"},
-        "Data directory to index — overrides embedder.files in config.",
-        "dir");
-
-    const QCommandLineOption dbOpt(
-        {"b", "db"},
-        "Path to the embeddings database file (default: embeddings.db in working directory).",
-        "file");
-
-    const QCommandLineOption loadOpt(
-        {"l", "load"},
-        "Index mode: build the embedding database from the data directory, then exit.");
-
-    const QCommandLineOption skipIndexOpt(
-        {"s", "skip-index"},
-        "Skip the embedding/indexing pass and go straight to the chat loop.");
-
-    cli.addOption(configOpt);
-    cli.addOption(dataOpt);
-    cli.addOption(dbOpt);
-    cli.addOption(loadOpt);
-    cli.addOption(skipIndexOpt);
-    cli.process(app);
-
-    qDebug() << "main working dir" << QDir().absolutePath();
-
-    const QString configPath = cli.value(configOpt);
-    QFile configFile(configPath);
-    if (!configFile.open(QIODevice::ReadOnly)) {
-        qWarning() << "main: cannot open config file:" << configPath;
-        return 1;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        auto require_next = [&]() -> std::string {
+            if (i + 1 >= argc) {
+                std::cerr << "error: " << arg << " requires an argument\n";
+                std::exit(1);
+            }
+            return argv[++i];
+        };
+        if      (arg == "-c" || arg == "--config")     configPath   = require_next();
+        else if (arg == "-d" || arg == "--data")        dataOverride = require_next();
+        else if (arg == "-b" || arg == "--db")          dbOverride   = require_next();
+        else if (arg == "-l" || arg == "--load")        loadOnly     = true;
+        else if (arg == "-s" || arg == "--skip-index")  skipIndex    = true;
+        else if (arg == "-h" || arg == "--help")        { print_help(argv[0]); return 0; }
+        else { std::cerr << "error: unknown option: " << arg << "\n"; print_help(argv[0]); return 1; }
     }
 
-    const QJsonDocument doc = QJsonDocument::fromJson(configFile.readAll());
+    if (configPath.empty()) configPath = "config.json";
+
+    RAGBOT_LOG_INFO("main: working dir {}", std::filesystem::current_path().string());
+
+    std::ifstream configFile(configPath, std::ios::binary);
+    if (!configFile) {
+        RAGBOT_LOG_WARN("main: cannot open config file: {}", configPath);
+        return 1;
+    }
+    rb::Bytes configBytes((std::istreambuf_iterator<char>(configFile)),
+                          std::istreambuf_iterator<char>());
     configFile.close();
 
-    if (!doc.isObject()) {
-        qWarning() << "main: config is not a JSON object:" << configPath;
+    rb::Json root = rb::Json::parse(configBytes);
+    if (!root.isObject()) {
+        RAGBOT_LOG_WARN("main: config is not a JSON object: {}", configPath);
         return 1;
     }
 
-    QJsonObject root = doc.object();
+    rb::Json embedderConfig = root.value(ConfigKeys::Embedder);
+    if (!embedderConfig.isObject()) embedderConfig = rb::Json::object();
 
-    // Apply command-line overrides on top of the config file values.
-    {
-        QJsonObject embedderConfig = root.value(ConfigKeys::Embedder).toObject();
-        if (cli.isSet(dataOpt)) {
-            embedderConfig[ConfigKeys::Files] = cli.value(dataOpt);
-            qDebug() << "main: data directory overridden to" << cli.value(dataOpt);
-        }
-        if (cli.isSet(dbOpt)) {
-            embedderConfig[ConfigKeys::DbName] = cli.value(dbOpt);
-            qDebug() << "main: database path overridden to" << cli.value(dbOpt);
-        }
-        if (cli.isSet(skipIndexOpt)) {
-            embedderConfig[ConfigKeys::SkipIndex] = true;
-        }
-        root[ConfigKeys::Embedder] = embedderConfig;
+    if (!dataOverride.empty()) {
+        embedderConfig.setString(ConfigKeys::Files, dataOverride);
+        RAGBOT_LOG_INFO("main: data directory overridden to {}", dataOverride);
     }
+    if (!dbOverride.empty()) {
+        embedderConfig.setString(ConfigKeys::DbName, dbOverride);
+        RAGBOT_LOG_INFO("main: database path overridden to {}", dbOverride);
+    }
+    if (skipIndex)
+        embedderConfig.setBool(ConfigKeys::SkipIndex, true);
 
-    const bool loadOnly = cli.isSet(loadOpt);
+    root.set(ConfigKeys::Embedder, embedderConfig);
 
-    RAGBotSession session(rb::Json(root), loadOnly);
+    RAGBotSession session(root, loadOnly);
     if (!session.isValid()) return 1;
     if (loadOnly) return 0;
 

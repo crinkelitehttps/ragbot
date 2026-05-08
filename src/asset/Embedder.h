@@ -24,7 +24,6 @@ public:
 private:
     auto processAllFiles() -> void;
     auto processJsonFiles(const rb::Vector<rb::String>& paths) -> std::pair<int, int>;
-    auto fileEmbedManPage(const rb::String& path) -> bool;
 
     EmbeddingDatabase                   m_db;
     rb::Vector<rb::String>              m_files;
@@ -32,7 +31,6 @@ private:
     std::unique_ptr<Parser>             m_parser;
     CDDAResolver::Registry              m_registry;
     rb::Vector<float>                   m_lastQueryEmbedding;
-    rb::String                          m_parserType;
     int                                 m_topK { 10 };
     float                               m_similarityThreshold { 0.0f };
     bool                                m_isValid { false };

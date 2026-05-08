@@ -4,11 +4,7 @@
 
 RoleplayDatabase::RoleplayDatabase(const rb::String& dbName)
 {
-#ifdef RAGBOT_USE_QT
-    const int rc = sqlite3_open(dbName.toUtf8().constData(), &m_db);
-#else
     const int rc = sqlite3_open(dbName.c_str(), &m_db);
-#endif
     if (rc != SQLITE_OK) {
         RAGBOT_LOG_ERROR("RoleplayDatabase: cannot open {} — {}",
                          rb::to_std(dbName), sqlite3_errmsg(m_db));
@@ -64,15 +60,9 @@ auto RoleplayDatabase::logConversation(
 
     const int blobSize = static_cast<int>(queryEmbedding.size() * sizeof(float));
 
-#ifdef RAGBOT_USE_QT
-    const std::string queryStd    = query.toStdString();
-    const std::string researchStd = researchResponse.toStdString();
-    const std::string roleplayStd = roleplayResponse.toStdString();
-#else
     const std::string& queryStd    = query;
     const std::string& researchStd = researchResponse;
     const std::string& roleplayStd = roleplayResponse;
-#endif
 
     sqlite3_stmt* stmt = nullptr;
     sqlite3_prepare_v2(m_db,

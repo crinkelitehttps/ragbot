@@ -14,20 +14,11 @@ endif()
 # ---------------------------------------------------------------------------
 # Options
 # ---------------------------------------------------------------------------
-option(RAGBOT_USE_QT             "Build with Qt 5.15 dependency"                  ON)
 option(RAGBOT_LIBRARY            "Build only the static library (skip CLI exe)"  OFF)
 option(RAGBOT_EMBEDDED_INFERENCE "Link llama.cpp for in-process inference"       OFF)
 
-message(STATUS "RAGBOT_USE_QT             = ${RAGBOT_USE_QT}")
 message(STATUS "RAGBOT_LIBRARY            = ${RAGBOT_LIBRARY}")
 message(STATUS "RAGBOT_EMBEDDED_INFERENCE = ${RAGBOT_EMBEDDED_INFERENCE}")
-
-# Console executable depends on Qt today (QCommandLineParser, QCoreApplication).
-if(NOT RAGBOT_LIBRARY AND NOT RAGBOT_USE_QT)
-    message(FATAL_ERROR
-        "Console executable (RAGBOT_LIBRARY=OFF) requires RAGBOT_USE_QT=ON. "
-        "For a Qt-free build, set -DRAGBOT_LIBRARY=ON to produce only libragbot.a.")
-endif()
 
 # ---------------------------------------------------------------------------
 # Sources
@@ -39,6 +30,7 @@ set(RAGBOT_LIB_SOURCES
     src/asset/Reranker.cpp
     src/asset/Researcher.cpp
     src/asset/Roleplayer.cpp
+    src/compat/Http_curl.cpp
     src/compat/Io.cpp
     src/compat/Json.cpp
     src/compat/Logging.cpp
@@ -53,14 +45,6 @@ set(RAGBOT_LIB_SOURCES
     src/parsers/CDDAResolver.cpp
     src/parsers/ParserJSON.cpp
 )
-
-# ManPageResolver uses QProcess + QRegularExpression — Qt-only.
-if(RAGBOT_USE_QT)
-    list(APPEND RAGBOT_LIB_SOURCES src/parsers/ManPageResolver.cpp)
-    list(APPEND RAGBOT_LIB_SOURCES src/compat/Http_qt.cpp)
-else()
-    list(APPEND RAGBOT_LIB_SOURCES src/compat/Http_curl.cpp)
-endif()
 
 if(RAGBOT_EMBEDDED_INFERENCE)
     list(APPEND RAGBOT_LIB_SOURCES
@@ -82,38 +66,27 @@ add_library(ragbot STATIC ${RAGBOT_LIB_SOURCES})
 target_include_directories(ragbot PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
 # ---------------------------------------------------------------------------
-# Qt path
+# Dependencies
 # ---------------------------------------------------------------------------
-if(RAGBOT_USE_QT)
-    set(QT_ROOT "/home/joe/Qt/5.15.2/gcc_64" CACHE PATH "Qt 5.15.2 install root")
-    list(PREPEND CMAKE_PREFIX_PATH "${QT_ROOT}")
-    find_package(Qt5 5.15 REQUIRED COMPONENTS Core Network)
-    target_link_libraries(ragbot PUBLIC Qt5::Core Qt5::Network)
-    target_compile_definitions(ragbot PUBLIC RAGBOT_USE_QT)
-else()
-    find_package(CURL REQUIRED)
-    include(FetchContent)
-    FetchContent_Declare(
-        nlohmann_json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG        v3.11.3
-    )
-    FetchContent_Declare(
-        fmt
-        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-        GIT_TAG        10.2.1
-    )
-    FetchContent_MakeAvailable(nlohmann_json fmt)
-    target_link_libraries(ragbot PUBLIC
-        CURL::libcurl
-        nlohmann_json::nlohmann_json
-        fmt::fmt
-    )
-endif()
+find_package(CURL REQUIRED)
+include(FetchContent)
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG        10.2.1
+)
+FetchContent_MakeAvailable(nlohmann_json fmt)
+target_link_libraries(ragbot PUBLIC
+    CURL::libcurl
+    nlohmann_json::nlohmann_json
+    fmt::fmt
+)
 
-# ---------------------------------------------------------------------------
-# Always-on dependencies
-# ---------------------------------------------------------------------------
 find_package(SQLite3 REQUIRED)
 find_package(Threads REQUIRED)
 target_link_libraries(ragbot PUBLIC
@@ -148,9 +121,8 @@ if(RAGBOT_EMBEDDED_INFERENCE)
 endif()
 
 # ---------------------------------------------------------------------------
-# CLI executable — Qt-only, suppressed when RAGBOT_LIBRARY=ON.
-# Output binary is named "ragbot" (CMake target is "ragbot_cli" to avoid
-# a name clash with the static-lib target).
+# CLI executable. Output binary is named "ragbot" (CMake target is
+# "ragbot_cli" to avoid a name clash with the static-lib target).
 # ---------------------------------------------------------------------------
 if(NOT RAGBOT_LIBRARY)
     add_executable(ragbot_cli ${RAGBOT_CLI_SOURCES})
@@ -159,37 +131,26 @@ if(NOT RAGBOT_LIBRARY)
 endif()
 
 # ---------------------------------------------------------------------------
-# compat_smoke — Phase 1 compat layer self-test. Links only the compat sources
-# and their dependencies, so it builds in both Qt and non-Qt modes regardless
-# of the migration state of the rest of the codebase.
+# compat_smoke — compat layer self-test.
 # ---------------------------------------------------------------------------
 set(RAGBOT_COMPAT_SOURCES
+    src/compat/Http_curl.cpp
     src/compat/Io.cpp
     src/compat/Json.cpp
     src/compat/Logging.cpp
     src/compat/Sha.cpp
     src/compat/Strings.cpp
 )
-if(RAGBOT_USE_QT)
-    list(APPEND RAGBOT_COMPAT_SOURCES src/compat/Http_qt.cpp)
-else()
-    list(APPEND RAGBOT_COMPAT_SOURCES src/compat/Http_curl.cpp)
-endif()
 
 add_executable(compat_smoke tests/compat_smoke.cpp ${RAGBOT_COMPAT_SOURCES})
 target_include_directories(compat_smoke PRIVATE ${CMAKE_SOURCE_DIR}/src)
-if(RAGBOT_USE_QT)
-    target_link_libraries(compat_smoke PRIVATE Qt5::Core Qt5::Network)
-    target_compile_definitions(compat_smoke PRIVATE RAGBOT_USE_QT)
-else()
-    target_link_libraries(compat_smoke PRIVATE nlohmann_json::nlohmann_json CURL::libcurl)
-endif()
+target_link_libraries(compat_smoke PRIVATE
+    nlohmann_json::nlohmann_json
+    CURL::libcurl
+)
 
 # ---------------------------------------------------------------------------
-# ragbot_smoke_c — Phase 5 C ABI smoke test. Compiled as pure C to prove
-# ragbot_c_api.h is a valid C header and libragbot.a links from a C TU.
-# LINKER_LANGUAGE CXX is required so the C++ runtime is brought in by the
-# linker even though all source files here are plain C.
+# ragbot_smoke_c — C ABI smoke test.
 # ---------------------------------------------------------------------------
 add_executable(ragbot_smoke_c tests/lib_smoke_c.c)
 target_include_directories(ragbot_smoke_c PRIVATE ${CMAKE_SOURCE_DIR}/src)

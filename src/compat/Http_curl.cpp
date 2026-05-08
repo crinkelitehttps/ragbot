@@ -1,8 +1,6 @@
 // libcurl implementation of rb::HttpClient.
-// Compiled only when RAGBOT_USE_QT is NOT defined.
 #include "Http.h"
 
-#ifndef RAGBOT_USE_QT
 #include <curl/curl.h>
 #include <cstdlib>
 #include <cstring>
@@ -212,5 +210,3 @@ auto HttpClient::postMany(const String& url,
 }
 
 }  // namespace rb
-
-#endif // !RAGBOT_USE_QT

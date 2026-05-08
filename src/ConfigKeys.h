@@ -17,7 +17,6 @@ namespace ConfigKeys {
     // ── Embedder ──────────────────────────────────────────────────────────────
     inline const rb::String DbName              { "name"                };
     inline const rb::String Files               { "files"               };
-    inline const rb::String ParserType          { "parserType"          };
     inline const rb::String TopK                { "topK"                };
     inline const rb::String SimilarityThreshold { "similarityThreshold" };
     inline const rb::String SkipIndex           { "skipIndex"           };
@@ -49,9 +48,5 @@ namespace ConfigKeys {
     // ── Backend values ────────────────────────────────────────────────────────
     inline const rb::String BackendEmbedded { "embedded" };
     inline const rb::String BackendNetwork  { "network"  };
-
-    // ── Parser type values ────────────────────────────────────────────────────
-    inline const rb::String ParserCddaJson { "cdda_json" };
-    inline const rb::String ParserManPage  { "man_page"  };
 
 } // namespace ConfigKeys

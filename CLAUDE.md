@@ -4,26 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RAGBot is a C++/Qt5 console application implementing a three-stage RAG pipeline for querying Cataclysm: Dark Days Ahead (CDDA) game data. It embeds JSON game objects into a vector database, retrieves relevant context for a question, synthesises a factual answer (Researcher), then delivers it in-character (Roleplayer).
+RAGBot is a C++ console application implementing a three-stage RAG pipeline for querying Cataclysm: Dark Days Ahead (CDDA) game data. It embeds JSON game objects into a vector database, retrieves relevant context for a question, synthesises a factual answer (Researcher), then delivers it in-character (Roleplayer).
 
 ## Directory Layout
 
 ```
 ragbot/               ← source root (this repo)
-../build-ragbot/      ← executable build output (sibling, created manually)
+../build-ragbot/      ← executable build output (sibling, created by CMake)
 ../build-ragbot-lib/  ← library build output (sibling, created by b-lib.sh)
 ```
 
-All scripts are run from the **source root**. The build artefacts, Makefile, and binary live in `../build-ragbot/`.
+All scripts are run from the **source root**. Build artefacts and the binary live in `../build-ragbot/`.
 
 ## Scripts
 
 | Script | What it does |
 |--------|-------------|
-| `b.sh` | qmake (no embedded inference) + make — fast incremental build |
-| `b-clean.sh` | make clean + qmake `CONFIG+=embedded_inference` + `bear -- make` — full rebuild with llama.cpp, also regenerates `compile_commands.json` |
-| `b-lib.sh` | Builds `libragbot.a` into `../build-ragbot-lib/` with `CONFIG+="library embedded_inference"` |
-| `scan.sh` | Same as `b-clean.sh` — alias used when regenerating compile_commands is the goal |
+| `b.sh` | cmake configure + make — fast incremental build (network-only, no llama.cpp) |
+| `b-clean.sh` | rm build dir + cmake + make — full rebuild with llama.cpp, regenerates `compile_commands.json` |
+| `b-lib.sh` | Builds `libragbot.a` into `../build-ragbot-lib/` |
 | `run.sh` | Copies `config.json` to `../build-ragbot/`, then launches the binary under **gdb** |
 | `dump-cpp.sh` | Prints all `.h`/`.cpp` source files to stdout — useful for pasting into LLM context |
 
@@ -38,29 +37,29 @@ Typical workflow:
 
 ## Build Modes
 
-The project has two build modes controlled by a qmake CONFIG flag:
+The project uses CMake. `compile_commands.json` is generated automatically (`CMAKE_EXPORT_COMPILE_COMMANDS ON`).
 
-**Network-only (default)** — no llama.cpp dependency, builds anywhere with Qt:
+**Network-only (default)** — no llama.cpp dependency:
 ```bash
-qmake ../ragbot
-make -j$(nproc)
+cmake -B ../build-ragbot -S .
+cmake --build ../build-ragbot -j$(nproc)
 ```
 
 **With embedded inference** — pulls in llama.cpp, OpenBLAS, Vulkan:
 ```bash
-qmake CONFIG+=embedded_inference ../ragbot
-make -j$(nproc)
+cmake -B ../build-ragbot -S . -DRAGBOT_EMBEDDED_INFERENCE=ON
+cmake --build ../build-ragbot -j$(nproc)
 ```
 
-**Library build** — produces `libragbot.a` instead of the console executable; the two flags compose:
+**Library build** — produces `libragbot.a` instead of the console executable:
 ```bash
-qmake CONFIG+="library embedded_inference" ../ragbot
-make -j$(nproc)
+cmake -B ../build-ragbot-lib -S . -DRAGBOT_LIBRARY=ON
+cmake --build ../build-ragbot-lib -j$(nproc)
 ```
 
 ## Dependencies
 
-**Always required:** Qt 5.15.2 at `/home/joe/Qt/5.15.2/gcc_64` (not system Qt — the system has 5.15.18 which causes a runtime crash). System libs: `-lpthread -ldl -lm -lstdc++ -lsqlite3`.
+**Always required:** libcurl, nlohmann/json (v3.11.3, fetched by CMake), fmt (v10.2.1, fetched by CMake), sqlite3, pthreads.
 
 **Embedded inference only** (pre-built static libs required):
 
@@ -102,7 +101,7 @@ Required llama.cpp libs: `libcommon.a`, `libllama.a`, `libggml.a`, `libggml-base
 }
 ```
 
-All config key strings are defined as `inline const QLatin1String` constants in `src/ConfigKeys.h`.
+All config key strings are defined as `inline const rb::String` constants in `src/ConfigKeys.h`.
 
 **CLI flags** (override config at runtime):
 - `-c / --config` — path to config JSON
@@ -135,32 +134,32 @@ Console output
 ```
 
 **Session / orchestration layer** (`src/`):
-- `RAGBotSession` — owns the worker `QThread`, all pipeline objects (Embedder, Reranker, Researcher, Roleplayer, RoleplayDatabase), and conversation history. `ask(question, tokenSink)` is thread-safe and blocks until the answer returns. Pipeline objects are constructed and destroyed on the worker thread.
+- `RAGBotSession` — owns the worker thread, all pipeline objects (Embedder, Reranker, Researcher, Roleplayer, RoleplayDatabase), and conversation history. `ask(question, tokenSink)` is thread-safe and blocks until the answer returns.
 - `RAGBot` — thin stdin-loop wrapper; reads questions from stdin, calls `session.ask()`, handles "quit"/"exit".
 
 **Generation layer** (`src/generation/`):
-- `EmbeddingGenerator` — interface: `generate(QString) → QVector<float>`
-- `TextGenerator` — interface: `generateText(system, stream, prompt, tokenSink) → QString`; `TokenSink` is `std::function<void(QStringView)>` — when set, streamed tokens go to the sink instead of stdout
+- `EmbeddingGenerator` — interface: `generate(String) → Vector<float>`
+- `TextGenerator` — interface: `generateText(system, stream, prompt, tokenSink) → String`; `TokenSink` is `std::function<void(std::string_view)>` — when set, streamed tokens go to the sink instead of stdout
 - `GeneratorIP` — implements both; HTTP calls to OpenAI-compatible server (`/v1/embeddings`, `/v1/chat/completions`), SSE streaming
 - `EmbeddedEmbeddingGenerator` — implements `EmbeddingGenerator`; in-process llama.cpp, pooling=MEAN
 - `EmbeddedTextGenerator` — implements `TextGenerator`; in-process llama.cpp, ChatML prompt format
 - `GeneratorFactory` — `createEmbedding(config)` / `createText(config)` read `"backend"` key and return `unique_ptr` to the right implementation
 
 **Reranking layer** (`src/generation/`, `src/asset/`):
-- `RerankGenerator` — interface: `score(query, docs) → QVector<float>`
+- `RerankGenerator` — interface: `score(query, docs) → Vector<float>`
 - `RerankGeneratorIP` — network backend; Cohere `/v1/rerank` format
 - `EmbeddedRerankGenerator` — llama.cpp cross-encoder; uses `LLAMA_POOLING_TYPE_RANK`; picks up model's built-in `rerank` chat template if present, otherwise falls back to EOS/SEP-separated query+document
 - `Reranker` — asset class; scores all retrieved chunks, sorts descending, returns top-N; no-op if disabled or generator invalid
 - `GeneratorFactory::createRerank(config)` — same embedded/network dispatch as other generators
 
 **Parsing / indexing layer** (`src/parsers/`, `src/asset/Embedder.cpp`):
-- `CDDAResolver` — `buildRegistry(dir)` scans all JSON files and builds an `id → QJsonObject` map; `resolve(obj, registry)` walks `copy-from` chains and merges parent fields so each stored object contains complete effective stats
-- `ParserJSON` — `objectToChunk(QJsonObject)` returns a `Chunk{embedText, content}` where `embedText` is flattened natural language (for the embedding model) and `content` is compact JSON (stored in DB, sent to LLM)
+- `CDDAResolver` — `buildRegistry(dir)` scans all JSON files and builds an `id → rb::Json` map; `resolve(obj, registry)` walks `copy-from` chains and merges parent fields so each stored object contains complete effective stats
+- `ParserJSON` — `objectToChunk(rb::Json)` returns a `Chunk{embedText, content}` where `embedText` is flattened natural language (for the embedding model) and `content` is compact JSON (stored in DB, sent to LLM)
 - `Embedder` — drives file iteration; calls `CDDAResolver` then `ParserJSON` per object; skips `"abstract": true` base templates
 
 **Storage** (`src/db/`):
-- `EmbeddingDatabase` — SQLite (`sources`/`chunks` tables) + `VectorIndex` (hand-rolled brute-force cosine similarity, replaces FAISS). `SchemaVersion` constant triggers full re-index when bumped.
-- `VectorIndex` — `QVector<QVector<float>>` with dot-product search + `std::partial_sort`; 768-dimensional (nomic-embed output)
+- `EmbeddingDatabase` — SQLite (`sources`/`chunks` tables) + `VectorIndex` (hand-rolled brute-force cosine similarity). `SchemaVersion` constant triggers full re-index when bumped.
+- `VectorIndex` — `std::vector<std::vector<float>>` with dot-product search + `std::partial_sort`; 768-dimensional (nomic-embed output)
 
 ## Schema Migration
 
@@ -168,7 +167,7 @@ Console output
 
 ## Linting
 
-`.clang-tidy` is present. `compile_commands.json` is generated by `b-clean.sh` / `scan.sh` (via `bear -- make`).
+`.clang-tidy` is present. `compile_commands.json` is generated automatically by CMake into `../build-ragbot/`.
 
 ```bash
 clang-tidy -p ../build-ragbot src/RAGBot.cpp
@@ -182,35 +181,20 @@ clang-tidy -p ../build-ragbot src/RAGBot.cpp
 
 ## Library Build
 
-RAGBot can be consumed as a static library (`libragbot.a`) by a host application (e.g. CDDA). The public surface is a pure C header with zero Qt symbols: `src/ragbot_c_api.h`.
+RAGBot can be consumed as a static library (`libragbot.a`) by a host application (e.g. CDDA). The public surface is a pure C header: `src/ragbot_c_api.h`.
 
 ### Building with CMake
 
 ```bash
-# Qt build, network-only inference (recommended for integration)
-cmake -B ../build-ragbot-lib -S . \
-    -DRAGBOT_LIBRARY=ON \
-    -DRAGBOT_USE_QT=ON
+# Network-only inference (recommended for integration)
+cmake -B ../build-ragbot-lib -S . -DRAGBOT_LIBRARY=ON
 cmake --build ../build-ragbot-lib -j$(nproc)
 
-# Qt build + embedded llama.cpp inference
+# With embedded llama.cpp inference
 cmake -B ../build-ragbot-lib -S . \
     -DRAGBOT_LIBRARY=ON \
-    -DRAGBOT_USE_QT=ON \
     -DRAGBOT_EMBEDDED_INFERENCE=ON
 cmake --build ../build-ragbot-lib -j$(nproc)
-
-# Qt-free build (libcurl + nlohmann/json + {fmt} fetched automatically)
-cmake -B ../build-ragbot-lib -S . \
-    -DRAGBOT_LIBRARY=ON \
-    -DRAGBOT_USE_QT=OFF
-cmake --build ../build-ragbot-lib -j$(nproc)
-```
-
-### Building with qmake (embedded inference only)
-
-```bash
-./b-lib.sh    # outputs libragbot.a to ../build-ragbot-lib/
 ```
 
 ### Linking
@@ -219,11 +203,10 @@ cmake --build ../build-ragbot-lib -j$(nproc)
 g++ my_app.cpp -o my_app \
     -I path/to/ragbot/src \
     path/to/libragbot.a \
-    -lQt5Core -lQt5Network -lsqlite3 -lpthread -ldl -lm -lstdc++
+    -lcurl -lsqlite3 -lpthread -ldl -lm -lstdc++
 # Embedded inference: also add -lcommon -lllama -lggml* -lopenblas -lgomp -lvulkan
+# nlohmann/json and fmt are header-only / static — already inside libragbot.a
 ```
-
-> **Qt version constraint:** the library must be linked with Qt 5.15.2 from `/home/joe/Qt/5.15.2/gcc_64`. The system Qt (5.15.18) causes a runtime crash. If the host application already links Qt, it must use a compatible build or arrange ABI isolation.
 
 ### API quick reference
 
