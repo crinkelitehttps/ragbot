@@ -103,6 +103,61 @@ auto GeneratorIP::parseEmbeddingResponse(const rb::Bytes& data) -> rb::Vector<fl
 }
 
 
+static auto buildBatchBody(const rb::Vector<rb::String>& inputs,
+                           size_t start, size_t end,
+                           const rb::String& modelName) -> rb::Bytes
+{
+    rb::Json inputArr = rb::Json::array();
+    for (size_t idx = start; idx < end; ++idx)
+        inputArr.append(rb::Json::fromString(inputs[static_cast<int>(idx)]));
+
+    rb::Json body = rb::Json::object();
+    body.set("input", inputArr);
+    body.setString("model", modelName);
+    return body.dump(true);
+}
+
+
+static auto bodySnippet(const rb::Bytes& body, size_t maxLen = 200) -> std::string
+{
+    const size_t len = body.size() < maxLen ? body.size() : maxLen;
+    return std::string(reinterpret_cast<const char*>(body.data()), len);
+}
+
+
+static auto decodeBatchResponse(const rb::HttpClient::Response& resp, size_t expectedSize)
+    -> rb::Vector<rb::Vector<float>>
+{
+    if (!rb::str_empty(resp.error)) {
+        RAGBOT_LOG_WARN("GeneratorIP::generateBatch() curl error: {}", rb::to_std(resp.error));
+        return {};
+    }
+    const rb::Json doc = rb::Json::parse(resp.body);
+    if (!doc.isValid()) {
+        RAGBOT_LOG_WARN("GeneratorIP::generateBatch(): invalid response (status {}, {} bytes): {}",
+                        resp.statusCode, static_cast<int>(resp.body.size()),
+                        bodySnippet(resp.body));
+        return {};
+    }
+    const rb::Json dataArr = doc.value("data");
+    if (!dataArr.isArray()) {
+        RAGBOT_LOG_WARN("GeneratorIP::generateBatch(): missing data array (status {}): {}",
+                        resp.statusCode, bodySnippet(resp.body));
+        return {};
+    }
+    if (static_cast<size_t>(dataArr.size()) < expectedSize) {
+        RAGBOT_LOG_WARN("GeneratorIP::generateBatch(): got {} embeddings, expected {} (status {})",
+                        dataArr.size(), expectedSize, resp.statusCode);
+        return {};
+    }
+    rb::Vector<rb::Vector<float>> out;
+    out.reserve(static_cast<int>(expectedSize));
+    for (size_t idx = 0; idx < expectedSize; ++idx)
+        out.push_back(parseOneEmbedding(dataArr.at(idx)));
+    return out;
+}
+
+
 auto GeneratorIP::generate(const rb::String& data) -> rb::Vector<float>
 {
     if (!m_isValid) return {};
@@ -125,12 +180,17 @@ auto GeneratorIP::generate(const rb::String& data) -> rb::Vector<float>
     return parseEmbeddingResponse(resp.body);
 }
 
-auto GeneratorIP::generateBatch(const rb::Vector<rb::String>& inputs)
-    -> rb::Vector<rb::Vector<float>>
+auto GeneratorIP::generateBatch(
+    const rb::Vector<rb::String>& inputs,
+    const ProgressCallback& onProgress
+) -> rb::Vector<rb::Vector<float>>
 {
     if (!m_isValid || inputs.empty()) return {};
 
-    static constexpr size_t MaxBatch { 64 };
+    // Larger batches amortise HTTP overhead; bounded concurrency keeps the
+    // server's slot queue from backing up past the request timeout.
+    static constexpr size_t MaxBatch      { 256 };
+    static constexpr size_t MaxConcurrent { 8 };
 
     const rb::HttpClient::HeaderList headers {
         { rb::from_std("Content-Type"), rb::from_std("application/json") }
@@ -144,57 +204,77 @@ auto GeneratorIP::generateBatch(const rb::Vector<rb::String>& inputs)
     rb::Vector<size_t> batchStarts;
     for (size_t start = 0; start < total; start += MaxBatch) {
         const size_t end = (start + MaxBatch < total) ? start + MaxBatch : total;
-
-        rb::Json inputArr = rb::Json::array();
-        for (size_t idx = start; idx < end; ++idx)
-            inputArr.append(rb::Json::fromString(inputs[static_cast<int>(idx)]));
-
-        rb::Json body = rb::Json::object();
-        body.set("input", inputArr);
-        body.setString("model", m_modelName);
-        bodies.push_back(body.dump(true));
+        bodies.push_back(buildBatchBody(inputs, start, end, m_modelName));
         batchStarts.push_back(start);
     }
 
-    // Dispatch all sub-batches concurrently.
-    const rb::Vector<rb::HttpClient::Response> responses =
-        m_http.postMany(endpoint, headers, bodies);
-
     rb::Vector<rb::Vector<float>> results(static_cast<int>(total));
-    for (int bi = 0; bi < responses.size(); ++bi) {
-        rb::HttpClient::Response resp = responses[bi];
-        if (!rb::str_empty(resp.error)) {
-            RAGBOT_LOG_WARN("GeneratorIP::generateBatch() retrying sub-batch {}: {}",
-                            bi, rb::to_std(resp.error));
-            resp = m_http.post(endpoint, headers, bodies[bi]);
-        }
-        if (!rb::str_empty(resp.error)) {
-            RAGBOT_LOG_WARN("GeneratorIP::generateBatch() error: {}", rb::to_std(resp.error));
-            return {};
+    const int totalBatches = static_cast<int>(bodies.size());
+    int failedBatches = 0;
+
+    RAGBOT_LOG_INFO("GeneratorIP::generateBatch(): {} inputs, {} sub-batches × {} = {} waves",
+                    static_cast<int>(total), totalBatches, static_cast<int>(MaxConcurrent),
+                    (totalBatches + static_cast<int>(MaxConcurrent) - 1)
+                        / static_cast<int>(MaxConcurrent));
+
+    // Dispatch in waves of MaxConcurrent sub-batches.
+    for (int waveStart = 0; waveStart < totalBatches;
+         waveStart += static_cast<int>(MaxConcurrent)) {
+        const int waveEnd = (waveStart + static_cast<int>(MaxConcurrent) < totalBatches)
+            ? waveStart + static_cast<int>(MaxConcurrent)
+            : totalBatches;
+
+        rb::Vector<rb::Bytes> waveBodies;
+        for (int batchIdx = waveStart; batchIdx < waveEnd; ++batchIdx)
+            waveBodies.push_back(bodies[batchIdx]);
+
+        const int waveNum = (waveStart / static_cast<int>(MaxConcurrent)) + 1;
+        RAGBOT_LOG_INFO("GeneratorIP::generateBatch(): wave {} dispatching sub-batches {}–{}",
+                        waveNum, waveStart, waveEnd - 1);
+
+        const rb::Vector<rb::HttpClient::Response> responses =
+            m_http.postMany(endpoint, headers, waveBodies);
+
+        RAGBOT_LOG_INFO("GeneratorIP::generateBatch(): wave {} responses received",
+                        waveNum);
+
+        for (int waveIdx = 0; waveIdx < responses.size(); ++waveIdx) {
+            const int batchIdx = waveStart + waveIdx;
+            const size_t start = batchStarts[batchIdx];
+            const size_t end = (start + MaxBatch < total) ? start + MaxBatch : total;
+            const size_t batchSize = end - start;
+
+            rb::HttpClient::Response resp = responses[waveIdx];
+            rb::Vector<rb::Vector<float>> decoded = decodeBatchResponse(resp, batchSize);
+
+            if (decoded.empty()) {
+                RAGBOT_LOG_WARN("GeneratorIP::generateBatch(): retrying sub-batch {}", batchIdx);
+                resp = m_http.post(endpoint, headers, bodies[batchIdx]);
+                decoded = decodeBatchResponse(resp, batchSize);
+            }
+
+            if (decoded.empty()) {
+                RAGBOT_LOG_WARN("GeneratorIP::generateBatch(): sub-batch {} permanently failed; "
+                                "{} chunks will be skipped", batchIdx, static_cast<int>(batchSize));
+                ++failedBatches;
+                continue;  // leave results[start..end) as default-empty
+            }
+
+            for (size_t idx = 0; idx < batchSize; ++idx)
+                results[static_cast<int>(start + idx)] = decoded[static_cast<int>(idx)];
         }
 
-        const rb::Json doc = rb::Json::parse(resp.body);
-        if (!doc.isValid()) {
-            RAGBOT_LOG_WARN("GeneratorIP::generateBatch(): invalid response");
-            return {};
+        if (onProgress) {
+            const size_t done = static_cast<size_t>(waveEnd) * MaxBatch < total
+                ? static_cast<size_t>(waveEnd) * MaxBatch
+                : total;
+            onProgress(done, results);
         }
-        const rb::Json dataArr = doc.value("data");
-        if (!dataArr.isArray()) {
-            RAGBOT_LOG_WARN("GeneratorIP::generateBatch(): missing data array");
-            return {};
-        }
-
-        const size_t start = batchStarts[bi];
-        const size_t end = (start + MaxBatch < total) ? start + MaxBatch : total;
-        const size_t batchSize = end - start;
-        if (static_cast<size_t>(dataArr.size()) < batchSize) {
-            RAGBOT_LOG_WARN("GeneratorIP::generateBatch(): got {} embeddings, expected {}",
-                            dataArr.size(), batchSize);
-            return {};
-        }
-        for (size_t idx = 0; idx < batchSize; ++idx)
-            results[static_cast<int>(start + idx)] = parseOneEmbedding(dataArr.at(idx));
     }
+
+    if (failedBatches > 0)
+        RAGBOT_LOG_WARN("GeneratorIP::generateBatch(): {} of {} sub-batches failed",
+                        failedBatches, totalBatches);
 
     return results;
 }

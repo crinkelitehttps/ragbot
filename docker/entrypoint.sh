@@ -9,8 +9,10 @@ PORT=${PORT:-8080}
 # PARALLEL * 2048 to give each slot a full window.
 # --ubatch-size is the physical batch size: must be >= the longest single input or
 # requests fail with "input (N tokens) is too large to process".
-PARALLEL=${PARALLEL:-8}
-CTX=${CTX:-16384}    # 8 slots × 2048 per-slot
+# nomic-embed Q8 is ~270MB so VRAM headroom is huge — bumping --parallel to 16
+# lets continuous batching keep more slots saturated under high client load.
+PARALLEL=${PARALLEL:-16}
+CTX=${CTX:-32768}    # 16 slots × 2048 per-slot
 BATCH=${BATCH:-2048}
 UBATCH=${UBATCH:-2048}
 N_GPU_LAYERS=${N_GPU_LAYERS:-99}

@@ -12,8 +12,10 @@ public:
     explicit GeneratorIP(const rb::Json& config);
 
     [[nodiscard]] auto generate(const rb::String& data) -> rb::Vector<float> override;
-    [[nodiscard]] auto generateBatch(const rb::Vector<rb::String>& inputs)
-        -> rb::Vector<rb::Vector<float>> override;
+    [[nodiscard]] auto generateBatch(
+        const rb::Vector<rb::String>& inputs,
+        const ProgressCallback& onProgress = {}
+    ) -> rb::Vector<rb::Vector<float>> override;
 
     auto generateText(
         const rb::String& systemPrompt,

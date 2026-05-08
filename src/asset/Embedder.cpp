@@ -70,24 +70,9 @@ void Embedder::processAllFiles()
                     static_cast<int>(paths.size()), static_cast<int>(m_files.size()));
     m_registry = CDDAResolver::buildRegistryFromFiles(paths);
 
-    const int total = static_cast<int>(paths.size());
-
-    if (!m_db.beginBatch()) {
-        RAGBOT_LOG_WARN("Embedder::processAllFiles(): failed to begin batch transaction");
-        return;
-    }
-
-    int indexed = 0;
-    int skipped = 0;
-
     const auto counts = processJsonFiles(paths);
-    indexed = counts.first;
-    skipped = counts.second;
-
-    if (!m_db.commitBatch()) {
-        RAGBOT_LOG_WARN("Embedder::processAllFiles(): batch commit failed — re-index required");
-        return;
-    }
+    const int indexed = counts.first;
+    const int skipped = counts.second;
 
     RAGBOT_LOG_INFO("Embedder::processAllFiles(): done — {} newly indexed, {} already up-to-date",
                     indexed, skipped);
@@ -155,7 +140,10 @@ auto Embedder::processJsonFiles(const rb::Vector<rb::String>& paths) -> std::pai
         fileSlots.push_back(slot);
     }
 
-    // Phase 2 — single concurrent dispatch across all files.
+    // Phase 2 — dispatch with a per-wave callback that commits any files
+    // whose chunks are all populated. Each wave's commits are wrapped in an
+    // outer BEGIN/COMMIT so they hit disk immediately — a crash now at most
+    // loses the in-flight wave instead of the entire run.
     rb::Vector<rb::String> inputs;
     inputs.reserve(flat.size());
     for (const auto& fc : flat) inputs.push_back(fc.embedText);
@@ -163,33 +151,23 @@ auto Embedder::processJsonFiles(const rb::Vector<rb::String>& paths) -> std::pai
     RAGBOT_LOG_INFO("Embedder::processJsonFiles(): dispatching {} chunks across {} files",
                     static_cast<int>(flat.size()), static_cast<int>(fileSlots.size()));
 
-    const rb::Vector<rb::Vector<float>> embeddings = m_generator->generateBatch(inputs);
-    if (static_cast<size_t>(embeddings.size()) != static_cast<size_t>(flat.size())) {
-        RAGBOT_LOG_WARN("Embedder::processJsonFiles(): batch embedding size mismatch ({} vs {})",
-                        static_cast<int>(embeddings.size()), static_cast<int>(flat.size()));
-        return { 0, static_cast<int>(fileSlots.size()) };
-    }
-
-    // Phase 3 — per-file commit in original order.
     int indexed = 0;
     int skipped = 0;
-    for (FileSlot& slot : fileSlots) {
-        if (slot.skipped) { ++skipped; continue; }
+    size_t commitCursor = 0;
 
+    auto commitOneFile = [&](FileSlot& slot, const rb::Vector<rb::Vector<float>>& embeddings) {
         if (!m_db.beginFileTransaction()) {
             RAGBOT_LOG_WARN("Embedder::processJsonFiles(): failed to open savepoint for {}",
                             rb::to_std(slot.path));
             ++skipped;
-            continue;
+            return;
         }
-
         const int sourceId = m_db.newSourceFileId(slot.hexHash, slot.path);
         if (sourceId < 0) {
             m_db.rollbackFileTransaction();
             ++skipped;
-            continue;
+            return;
         }
-
         bool ok = true;
         int added = 0;
         for (const int flatIdx : slot.flatIndices) {
@@ -201,17 +179,53 @@ auto Embedder::processJsonFiles(const rb::Vector<rb::String>& paths) -> std::pai
             }
             if (m_db.embeddingSave(sourceId, embeddings[flatIdx], flat[flatIdx].content)) ++added;
         }
-
         if (!ok || !m_db.commitFileTransaction()) {
             m_db.rollbackFileTransaction();
             ++skipped;
-            continue;
+            return;
         }
-
         RAGBOT_LOG_INFO("Embedder::processJsonFiles(): indexed {} chunks from {}",
                         added, rb::to_std(rb::path_filename(slot.path)));
         ++indexed;
-    }
+    };
+
+    auto onWaveDone = [&](size_t done, const rb::Vector<rb::Vector<float>>& embeddings) {
+        if (!m_db.beginBatch()) {
+            RAGBOT_LOG_WARN("Embedder::processJsonFiles(): failed to begin wave transaction");
+            return;
+        }
+        int waveCommitted = 0;
+        while (commitCursor < static_cast<size_t>(fileSlots.size())) {
+            FileSlot& slot = fileSlots[static_cast<int>(commitCursor)];
+            if (slot.skipped) {
+                ++commitCursor;
+                ++skipped;
+                continue;
+            }
+            if (!slot.flatIndices.empty() &&
+                static_cast<size_t>(slot.flatIndices.back()) >= done)
+                break;
+            commitOneFile(slot, embeddings);
+            ++commitCursor;
+            ++waveCommitted;
+        }
+        if (!m_db.commitBatch()) {
+            RAGBOT_LOG_WARN("Embedder::processJsonFiles(): wave commit failed");
+        } else if (waveCommitted > 0) {
+            RAGBOT_LOG_INFO("Embedder::processJsonFiles(): committed {} files this wave "
+                            "(through chunk {}/{})",
+                            waveCommitted, static_cast<int>(done),
+                            static_cast<int>(flat.size()));
+        }
+    };
+
+    const rb::Vector<rb::Vector<float>> embeddings =
+        m_generator->generateBatch(inputs, onWaveDone);
+
+    // Final flush: covers files trailing the last fired callback (or the
+    // empty-inputs case where no wave ever fires).
+    if (commitCursor < static_cast<size_t>(fileSlots.size()))
+        onWaveDone(static_cast<size_t>(inputs.size()), embeddings);
 
     return { indexed, skipped };
 }
