@@ -84,9 +84,11 @@ auto GeneratorIP::generateBatch(const rb::Vector<rb::String>& inputs)
     };
     const rb::String endpoint = m_basePath + rb::from_std("v1/embeddings");
 
-    rb::Vector<rb::Vector<float>> results(inputs.size());
-    const size_t total = inputs.size();
+    const size_t total = static_cast<size_t>(inputs.size());
 
+    // Build one request body per sub-batch of MaxBatch inputs.
+    rb::Vector<rb::Bytes> bodies;
+    rb::Vector<size_t> batchStarts;
     for (size_t start = 0; start < total; start += MaxBatch) {
         const size_t end = (start + MaxBatch < total) ? start + MaxBatch : total;
 
@@ -97,8 +99,22 @@ auto GeneratorIP::generateBatch(const rb::Vector<rb::String>& inputs)
         rb::Json body = rb::Json::object();
         body.set("input", inputArr);
         body.setString("model", m_modelName);
+        bodies.push_back(body.dump(true));
+        batchStarts.push_back(start);
+    }
 
-        const rb::HttpClient::Response resp = m_http.post(endpoint, headers, body.dump(true));
+    // Dispatch all sub-batches concurrently.
+    const rb::Vector<rb::HttpClient::Response> responses =
+        m_http.postMany(endpoint, headers, bodies);
+
+    rb::Vector<rb::Vector<float>> results(static_cast<int>(total));
+    for (int bi = 0; bi < responses.size(); ++bi) {
+        rb::HttpClient::Response resp = responses[bi];
+        if (!rb::str_empty(resp.error)) {
+            RAGBOT_LOG_WARN("GeneratorIP::generateBatch() retrying sub-batch {}: {}",
+                            bi, rb::to_std(resp.error));
+            resp = m_http.post(endpoint, headers, bodies[bi]);
+        }
         if (!rb::str_empty(resp.error)) {
             RAGBOT_LOG_WARN("GeneratorIP::generateBatch() error: {}", rb::to_std(resp.error));
             return {};
@@ -115,8 +131,10 @@ auto GeneratorIP::generateBatch(const rb::Vector<rb::String>& inputs)
             return {};
         }
 
+        const size_t start = batchStarts[bi];
+        const size_t end = (start + MaxBatch < total) ? start + MaxBatch : total;
         const size_t batchSize = end - start;
-        if (dataArr.size() < batchSize) {
+        if (static_cast<size_t>(dataArr.size()) < batchSize) {
             RAGBOT_LOG_WARN("GeneratorIP::generateBatch(): got {} embeddings, expected {}",
                             dataArr.size(), batchSize);
             return {};

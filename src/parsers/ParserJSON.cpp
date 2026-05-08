@@ -40,6 +40,19 @@ auto ParserJSON::stringifyObject(const rb::Json& obj) -> rb::String
         if (i > 0) out += rb::from_std(" ");
         out += parts[i];
     }
+
+    // Cap embedText so a single chunk fits in the embedding model's ~2048-token
+    // training context. CDDA dialogue trees and dense monster descriptions can
+    // otherwise produce 2000-3000+ token chunks that the server rejects with 500,
+    // dropping the entire sub-batch.
+    static constexpr int MaxEmbedChars { 6000 };
+    if (static_cast<int>(out.size()) > MaxEmbedChars) {
+#ifdef RAGBOT_USE_QT
+        out = out.left(MaxEmbedChars);
+#else
+        out = out.substr(0, static_cast<size_t>(MaxEmbedChars));
+#endif
+    }
     return out;
 }
 

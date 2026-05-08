@@ -94,6 +94,63 @@ auto HttpClient::postStreaming(const String& url,
     return r;
 }
 
+auto HttpClient::postMany(const String& url,
+                           const HeaderList& headers,
+                           const Vector<Bytes>& bodies,
+                           int timeoutMs) -> Vector<Response>
+{
+    if (bodies.empty()) return {};
+
+    const int count = bodies.size();
+    Vector<Response> results(count);
+    int pending = count;
+
+    QNetworkRequest req = makeHeaders(headers);
+    req.setUrl(QUrl(url));
+
+    QEventLoop loop;
+    QTimer timer;
+    timer.setSingleShot(true);
+
+    QVector<QNetworkReply*> replies(count, nullptr);
+    for (int i = 0; i < count; ++i) {
+        replies[i] = m_impl->mgr.post(req, bodies[i]);
+        QObject::connect(replies[i], &QNetworkReply::finished, [&, i]() {
+            QNetworkReply* reply = replies[i];
+            if (reply->error() == QNetworkReply::NoError) {
+                results[i].statusCode =
+                    reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+                results[i].body = reply->readAll();
+            } else {
+                results[i].error = reply->errorString();
+            }
+            reply->deleteLater();
+            replies[i] = nullptr;
+            if (--pending == 0) {
+                timer.stop();
+                loop.quit();
+            }
+        });
+    }
+
+    QObject::connect(&timer, &QTimer::timeout, [&]() {
+        for (int i = 0; i < count; ++i) {
+            if (replies[i]) {
+                results[i].error = from_std("request timed out");
+                replies[i]->abort();
+                replies[i]->deleteLater();
+                replies[i] = nullptr;
+            }
+        }
+        loop.quit();
+    });
+
+    timer.start(timeoutMs);
+    loop.exec();
+
+    return results;
+}
+
 }  // namespace rb
 
 #endif // RAGBOT_USE_QT

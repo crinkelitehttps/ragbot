@@ -16,13 +16,15 @@ POLL_TIMEOUT=300
 API_KEY="${VASTAI_API_KEY:-}"
 MAX_PRICE="0.30"
 MIN_GPU_RAM="8"
+SSH_KEY_FILE="${HOME}/.ssh/id_ed25519.pub"
 YES=0
 
 usage() {
-    echo "Usage: $0 [--api-key KEY] [--max-price DOLLARS_PER_HR] [--gpu-ram GB] [--yes]"
+    echo "Usage: $0 [--api-key KEY] [--max-price DOLLARS_PER_HR] [--gpu-ram GB] [--ssh-key PATH] [--yes]"
     echo "  --api-key     vast.ai API key (default: \$VASTAI_API_KEY)"
     echo "  --max-price   maximum price in \$/hr (default: $MAX_PRICE)"
     echo "  --gpu-ram     minimum GPU VRAM in GB (default: $MIN_GPU_RAM)"
+    echo "  --ssh-key     path to SSH public key to attach (default: $SSH_KEY_FILE)"
     echo "  --yes         skip confirmation prompt"
     exit 1
 }
@@ -32,11 +34,17 @@ while [[ $# -gt 0 ]]; do
         --api-key) API_KEY="$2"; shift 2 ;;
         --max-price) MAX_PRICE="$2"; shift 2 ;;
         --gpu-ram) MIN_GPU_RAM="$2"; shift 2 ;;
+        --ssh-key) SSH_KEY_FILE="$2"; shift 2 ;;
         --yes|-y) YES=1; shift ;;
         -h|--help) usage ;;
         *) echo "Unknown argument: $1"; usage ;;
     esac
 done
+
+if [[ ! -f "$SSH_KEY_FILE" ]]; then
+    echo "SSH public key not found at $SSH_KEY_FILE — pass --ssh-key PATH or generate one with ssh-keygen."
+    exit 1
+fi
 
 KEY_ARG=""
 [[ -n "$API_KEY" ]] && KEY_ARG="--api-key $API_KEY"
@@ -89,7 +97,7 @@ echo ""
 echo "Creating instance..."
 CREATE_OUT=$(vast_raw create instance "$OFFER_ID" \
     --image "$IMAGE" \
-    --env "-e MODEL_URL=$MODEL_URL -p ${CONTAINER_PORT}:${CONTAINER_PORT}" \
+    --env "-e MODEL_URL=$MODEL_URL -p ${CONTAINER_PORT}:${CONTAINER_PORT} -p 22:22" \
     --disk 10 \
     --args 2>&1)
 
@@ -129,7 +137,15 @@ while true; do
     ELAPSED=$((ELAPSED + POLL_INTERVAL))
 done
 
-# ── 4. Extract public address ─────────────────────────────────────────────────
+# ── 4. Attach SSH key ─────────────────────────────────────────────────────────
+echo ""
+echo "Attaching SSH key from $SSH_KEY_FILE..."
+vast attach ssh "$INSTANCE_ID" "$SSH_KEY_FILE" || {
+    echo "Warning: vast attach ssh failed — you can retry manually:"
+    echo "  vast attach ssh $INSTANCE_ID $SSH_KEY_FILE"
+}
+
+# ── 5. Extract public address ─────────────────────────────────────────────────
 INST_JSON=$(vast_raw show instance "$INSTANCE_ID" 2>/dev/null)
 
 HOST=$(echo "$INST_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('public_ipaddr') or d.get('ssh_host',''))")
@@ -144,8 +160,17 @@ if entries:
 else:
     print('')
 " 2>/dev/null || true)
-SSH_HOST=$(echo "$INST_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('ssh_host',''))" 2>/dev/null || true)
-SSH_PORT=$(echo "$INST_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('ssh_port',''))" 2>/dev/null || true)
+SSH_PORT=$(echo "$INST_JSON" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+ports = d.get('ports') or {}
+entries = ports.get('22/tcp', [])
+if entries:
+    print(entries[0]['HostPort'])
+else:
+    print(d.get('ssh_port') or '')
+" 2>/dev/null || true)
+SSH_HOST_OUT=$(echo "$INST_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('public_ipaddr') or d.get('ssh_host',''))" 2>/dev/null || true)
 
 if [[ -z "$HOST" || -z "$MAPPED_PORT" ]]; then
     echo "Instance is running but port mapping not yet available. Raw instance info:"
@@ -196,9 +221,9 @@ echo ""
 echo "Done. To index:"
 echo "  ../build-ragbot/ragbot --load --config $CONFIG_OUT"
 echo ""
-if [[ -n "$SSH_HOST" && -n "$SSH_PORT" ]]; then
+if [[ -n "$SSH_HOST_OUT" && -n "$SSH_PORT" ]]; then
     echo "To SSH into the instance:"
-    echo "  ssh -p $SSH_PORT root@$SSH_HOST"
+    echo "  ssh -p $SSH_PORT root@$SSH_HOST_OUT"
     echo ""
 fi
 echo "To tear down when finished:"

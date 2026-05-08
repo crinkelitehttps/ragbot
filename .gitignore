@@ -21,3 +21,11 @@ qt.conf
 plan.txt
 embeddings.db
 .embeddings.db
+
+# vast.ai deploy state (regenerated per instance)
+.vast-instance-id
+config-vast.json
+
+# Claude Code per-directory state
+.claude/
+src/.claude/

@@ -43,6 +43,12 @@ public:
     auto postStreaming(const String& url, const HeaderList& headers, const Bytes& body,
                        const ChunkSink& sink) -> Response;
 
+    // Fire multiple POSTs to the same URL concurrently, return responses in input order.
+    // Qt build: uses QNetworkAccessManager's native async dispatch (single thread).
+    // Curl build: falls back to sequential.
+    auto postMany(const String& url, const HeaderList& headers,
+                  const Vector<Bytes>& bodies, int timeoutMs = 240000) -> Vector<Response>;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;

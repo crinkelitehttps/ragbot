@@ -136,6 +136,18 @@ auto HttpClient::postStreaming(const String& url,
     return r;
 }
 
+auto HttpClient::postMany(const String& url,
+                           const HeaderList& headers,
+                           const Vector<Bytes>& bodies,
+                           int /*timeoutMs*/) -> Vector<Response>
+{
+    Vector<Response> results;
+    results.reserve(static_cast<int>(bodies.size()));
+    for (const auto& body : bodies)
+        results.push_back(post(url, headers, body));
+    return results;
+}
+
 }  // namespace rb
 
 #endif // !RAGBOT_USE_QT
