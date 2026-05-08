@@ -44,6 +44,10 @@ auto Researcher::research(
         context += rb::format("[{}, {}: {}]\n{}\n\n",
                               rb::to_std(fileName), rb::to_std(scoreLabel),
                               scoreValue, rb::to_std(r.content));
+        RAGBOT_LOG_INFO("Researcher::research(): chunk {}/{} [{} {}={}]\n{}",
+                        static_cast<int>(i + 1), static_cast<int>(results.size()),
+                        rb::to_std(fileName), rb::to_std(scoreLabel), scoreValue,
+                        rb::to_std(r.content));
     }
     RAGBOT_LOG_INFO("Researcher::research(): total context {} chars",
                     static_cast<int>(context.size()));
@@ -57,6 +61,11 @@ auto Researcher::research(
     }
     prompt += rb::from_std("Context:\n") + context
             + rb::from_std("\nQuestion: ") + question;
+
+    RAGBOT_LOG_INFO("Researcher::research(): system instruction:\n{}",
+                    rb::to_std(m_instruction));
+    RAGBOT_LOG_INFO("Researcher::research(): user prompt:\n{}",
+                    rb::to_std(prompt));
 
     if (!tokenSink) {
         std::fputs("\nResearcher: ", stdout);

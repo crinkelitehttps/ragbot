@@ -52,6 +52,11 @@ auto Roleplayer::respond(
     rb::Vector<rb::String> placeholders { m_characterName, researchAnswer, question };
     prompt += rb::replace_placeholders(promptTemplate, placeholders);
 
+    RAGBOT_LOG_INFO("Roleplayer::respond(): character background:\n{}",
+                    rb::to_std(m_characterBackground));
+    RAGBOT_LOG_INFO("Roleplayer::respond(): user prompt:\n{}",
+                    rb::to_std(prompt));
+
     if (!tokenSink) {
         std::fputc('\n', stdout);
         std::fputs(m_characterName.c_str(), stdout);
