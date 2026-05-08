@@ -14,7 +14,7 @@
     "similarityThreshold": 0.0,
     "generator": {
       "backend": "network",
-      "basePath": "http://220.82.52.202:50984/"
+      "platform": "vast.ai"
     }
   },
   "researcher": {

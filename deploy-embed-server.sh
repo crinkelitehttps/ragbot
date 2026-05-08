@@ -183,7 +183,15 @@ fi
 BASE_PATH="http://${HOST}:${MAPPED_PORT}/"
 echo "Endpoint: $BASE_PATH"
 
-# ── 5. Write config-vast.json ─────────────────────────────────────────────────
+# ── 5b. Write ~/.vast network marker ─────────────────────────────────────────
+NETWORK_DIR="$HOME/.vast"
+mkdir -p "$NETWORK_DIR"
+NETWORK_FILE="$NETWORK_DIR/ragbot-${HOST}:${MAPPED_PORT}.network"
+echo "$BASE_PATH" > "$NETWORK_FILE"
+echo "$NETWORK_FILE" > "$SCRIPT_DIR/.vast-network-file"
+echo "Network marker: $NETWORK_FILE"
+
+# ── 6. Write config-vast.json ─────────────────────────────────────────────────
 # Read embedder.files and embedder.name from main config.json as defaults
 FILES_PATH=$(python3 -c "import json; c=json.load(open('$SCRIPT_DIR/config.json')); print(c.get('embedder',{}).get('files',''))" 2>/dev/null || echo "")
 DB_NAME=$(python3 -c "import json; c=json.load(open('$SCRIPT_DIR/config.json')); print(c.get('embedder',{}).get('name','embeddings.db'))" 2>/dev/null || echo "embeddings.db")
@@ -198,7 +206,7 @@ config = {
         "files": "$FILES_PATH",
         "generator": {
             "backend": "network",
-            "basePath": "$BASE_PATH"
+            "platform": "vast.ai"
         }
     },
     "researcher": {

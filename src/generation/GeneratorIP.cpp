@@ -1,9 +1,58 @@
 #include "GeneratorIP.h"
+#include "../compat/Io.h"
 #include "../compat/Logging.h"
 #include "../compat/Strings.h"
 #include "../ConfigKeys.h"
+#include <algorithm>
+#include <cstdlib>
 #include <cstdio>
+#include <filesystem>
 #include <string_view>
+
+
+static auto resolveVastNetworkEndpoint() -> rb::String
+{
+    const char* home = std::getenv("HOME");
+    if (!home) {
+        RAGBOT_LOG_WARN("GeneratorIP: $HOME not set — cannot locate vast.ai .network file");
+        return {};
+    }
+
+    const std::filesystem::path dir = std::filesystem::path(home) / ".vast";
+    if (!std::filesystem::is_directory(dir)) {
+        RAGBOT_LOG_WARN("GeneratorIP: platform=vast.ai but ~/.vast/ not found");
+        return {};
+    }
+
+    rb::Vector<rb::String> matches;
+    for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+        const std::string name = entry.path().filename().string();
+        if (name.rfind("ragbot-", 0) == 0 && name.size() >= 16 &&
+            name.substr(name.size() - 8) == ".network")
+            matches.push_back(entry.path().string());
+    }
+
+    if (matches.empty()) {
+        RAGBOT_LOG_WARN("GeneratorIP: platform=vast.ai but no ~/.vast/ragbot-*.network file found");
+        return {};
+    }
+    if (matches.size() > 1) {
+        RAGBOT_LOG_WARN("GeneratorIP: multiple ~/.vast/ragbot-*.network files — using first alphabetically");
+        std::sort(matches.begin(), matches.end());
+    }
+
+    bool ok = false;
+    rb::String url = rb::read_file_text(matches[0], &ok);
+    if (!ok || url.empty()) {
+        RAGBOT_LOG_WARN("GeneratorIP: failed to read {}", matches[0]);
+        return {};
+    }
+    while (!url.empty() && (url.back() == '\n' || url.back() == '\r' || url.back() == ' '))
+        url.pop_back();
+
+    RAGBOT_LOG_INFO("GeneratorIP: resolved vast.ai endpoint {} from {}", url, matches[0]);
+    return url;
+}
 
 
 GeneratorIP::GeneratorIP(const rb::Json& config)
@@ -19,6 +68,10 @@ GeneratorIP::GeneratorIP(const rb::Json& config)
             m_basePath = legacy;
         }
     }
+    if (rb::str_empty(m_basePath) &&
+        config.stringValue(ConfigKeys::Platform) == ConfigKeys::PlatformVastAi)
+        m_basePath = resolveVastNetworkEndpoint();
+
     m_isValid = !rb::str_empty(m_basePath);
     if (!m_isValid)
         RAGBOT_LOG_WARN("GeneratorIP: no basePath in config — disabled");

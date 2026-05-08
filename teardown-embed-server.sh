@@ -43,3 +43,13 @@ $VAST $KEY_ARG destroy instance "$INSTANCE_ID"
 
 rm -f "$STATE_FILE"
 echo "Instance $INSTANCE_ID destroyed. State file removed."
+
+NETWORK_FILE_TRACKER="$SCRIPT_DIR/.vast-network-file"
+if [[ -f "$NETWORK_FILE_TRACKER" ]]; then
+    NETWORK_FILE=$(cat "$NETWORK_FILE_TRACKER")
+    if [[ -f "$NETWORK_FILE" ]]; then
+        rm -f "$NETWORK_FILE"
+        echo "Removed network marker: $NETWORK_FILE"
+    fi
+    rm -f "$NETWORK_FILE_TRACKER"
+fi
