@@ -188,6 +188,28 @@ auto EmbeddingDatabase::newSourceFileId(
 }
 
 
+auto EmbeddingDatabase::sourceFileExists(const rb::String& contentChecksum) -> bool
+{
+    if (!m_db) return false;
+
+#ifdef RAGBOT_USE_QT
+    const std::string checksumStd = contentChecksum.toStdString();
+#else
+    const std::string& checksumStd = contentChecksum;
+#endif
+
+    sqlite3_stmt* stmt = nullptr;
+    sqlite3_prepare_v2(m_db,
+        "SELECT 1 FROM sources WHERE sha256 = ? LIMIT 1",
+        -1, &stmt, nullptr);
+    sqlite3_bind_text(stmt, 1, checksumStd.data(), static_cast<int>(checksumStd.size()), SQLITE_STATIC);
+
+    const bool exists = (sqlite3_step(stmt) == SQLITE_ROW);
+    sqlite3_finalize(stmt);
+    return exists;
+}
+
+
 auto EmbeddingDatabase::embeddingSave(
     int sourceId,
     const rb::Vector<float>& chunkVector,

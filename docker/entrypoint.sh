@@ -4,10 +4,13 @@ set -euo pipefail
 MODEL_PATH=${MODEL_PATH:-/models/nomic-embed-text-v1.5.Q8_0.gguf}
 HOST=${HOST:-0.0.0.0}
 PORT=${PORT:-8080}
-# nomic-embed-text-v1.5 trains at ctx 2048; --ctx-size > 2048 is silently capped.
+# nomic-embed-text-v1.5 trains at ctx 2048; per-slot ctx is silently capped at 2048.
+# llama-server divides --ctx-size across --parallel slots, so total CTX must be
+# PARALLEL * 2048 to give each slot a full window.
 # --ubatch-size is the physical batch size: must be >= the longest single input or
 # requests fail with "input (N tokens) is too large to process".
-CTX=${CTX:-2048}
+PARALLEL=${PARALLEL:-8}
+CTX=${CTX:-16384}    # 8 slots × 2048 per-slot
 BATCH=${BATCH:-2048}
 UBATCH=${UBATCH:-2048}
 N_GPU_LAYERS=${N_GPU_LAYERS:-99}
@@ -38,6 +41,7 @@ exec llama-server \
     --ctx-size       "$CTX" \
     --batch-size     "$BATCH" \
     --ubatch-size    "$UBATCH" \
+    --parallel       "$PARALLEL" \
     --n-gpu-layers   "$N_GPU_LAYERS" \
     --embedding \
     --no-mmap >/tmp/llama.log 2>&1

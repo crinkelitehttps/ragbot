@@ -14,7 +14,7 @@
     "similarityThreshold": 0.0,
     "generator": {
       "backend": "network",
-      "basePath": "http://1.208.108.242:61720/"
+      "basePath": "http://220.82.52.202:50984/"
     }
   },
   "researcher": {

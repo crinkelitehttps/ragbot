@@ -10,6 +10,22 @@
 #include "../parsers/ManPageResolver.h"
 #endif
 
+namespace {
+
+struct FlatChunk {
+    int        slotIdx;
+    rb::String embedText;
+    rb::String content;
+};
+struct FileSlot {
+    rb::String      path;
+    rb::String      hexHash;
+    rb::Vector<int> flatIndices;
+    bool            skipped { false };
+};
+
+} // namespace
+
 
 Embedder::Embedder(const rb::Json& config)
     : m_db(config)
@@ -78,19 +94,23 @@ void Embedder::processAllFiles()
         return;
     }
 
-    int indexed = 0, skipped = 0, n = 0;
-    for (const rb::String& path : paths) {
-        const rb::String fname = rb::path_filename(path);
-        RAGBOT_LOG_INFO("[{}/{}] {}", ++n, total, rb::to_std(fname));
+    int indexed = 0;
+    int skipped = 0;
 
 #ifdef RAGBOT_USE_QT
-        if (m_parserType == ConfigKeys::ParserManPage) {
+    if (m_parserType == ConfigKeys::ParserManPage) {
+        int progress = 0;
+        for (const rb::String& path : paths) {
+            const rb::String fname = rb::path_filename(path);
+            RAGBOT_LOG_INFO("[{}/{}] {}", ++progress, total, rb::to_std(fname));
             if (fileEmbedManPage(path)) ++indexed; else ++skipped;
-        } else
-#endif
-        {
-            if (fileEmbed(path)) ++indexed; else ++skipped;
         }
+    } else
+#endif
+    {
+        const auto counts = processJsonFiles(paths);
+        indexed = counts.first;
+        skipped = counts.second;
     }
 
     if (!m_db.commitBatch()) {
@@ -103,75 +123,126 @@ void Embedder::processAllFiles()
 }
 
 
-auto Embedder::fileEmbed(const rb::String& path) -> bool
+auto Embedder::processJsonFiles(const rb::Vector<rb::String>& paths) -> std::pair<int, int>
 {
-    bool readOk = false;
-    const rb::Bytes fileData = rb::read_file_bytes(path, &readOk);
-    if (!readOk) {
-        RAGBOT_LOG_WARN("Embedder::fileEmbed(): cannot open {}", rb::to_std(path));
-        return false;
+    rb::Vector<FileSlot>  fileSlots;
+    rb::Vector<FlatChunk> flat;
+    fileSlots.reserve(paths.size());
+
+    // Phase 1 — pre-parse: read, sha256, JSON parse, resolve, build chunks.
+    // Skip files whose hash is already in the DB before doing any work.
+    int progress = 0;
+    const int total = static_cast<int>(paths.size());
+    for (const rb::String& path : paths) {
+        const rb::String fname = rb::path_filename(path);
+        RAGBOT_LOG_INFO("[{}/{}] {}", ++progress, total, rb::to_std(fname));
+
+        bool readOk = false;
+        const rb::Bytes fileData = rb::read_file_bytes(path, &readOk);
+        if (!readOk) {
+            RAGBOT_LOG_WARN("Embedder::processJsonFiles(): cannot open {}", rb::to_std(path));
+            FileSlot bad;
+            bad.path    = path;
+            bad.skipped = true;
+            fileSlots.push_back(bad);
+            continue;
+        }
+
+        FileSlot slot;
+        slot.path    = path;
+        slot.hexHash = rb::sha256_hex(fileData);
+
+        if (m_db.sourceFileExists(slot.hexHash)) {
+            RAGBOT_LOG_INFO("Embedder::processJsonFiles(): already indexed — {}", rb::to_std(path));
+            slot.skipped = true;
+            fileSlots.push_back(slot);
+            continue;
+        }
+
+        const rb::Json doc = rb::Json::parse(fileData);
+        rb::Vector<rb::Json> objects;
+        if (doc.isArray()) {
+            for (const auto& item : doc.items())
+                if (item.isObject()) objects.push_back(item);
+        } else if (doc.isObject()) {
+            objects.push_back(doc);
+        }
+
+        const int slotIdx = static_cast<int>(fileSlots.size());
+        for (const rb::Json& raw : objects) {
+            if (raw.boolValue("abstract", false)) continue;
+            const rb::Json resolved = CDDAResolver::resolve(raw, m_registry);
+            const Parser::Chunk chunk = m_parser->objectToChunk(resolved);
+            slot.flatIndices.push_back(static_cast<int>(flat.size()));
+            FlatChunk fc;
+            fc.slotIdx   = slotIdx;
+            fc.embedText = rb::from_std("search_document: ") + chunk.embedText;
+            fc.content   = chunk.content;
+            flat.push_back(fc);
+        }
+
+        fileSlots.push_back(slot);
     }
 
-    const rb::String hexHash = rb::sha256_hex(fileData);
-
-    m_db.beginFileTransaction();
-
-    const int sourceId = m_db.newSourceFileId(hexHash, path);
-    if (sourceId < 0) {
-        m_db.rollbackFileTransaction();
-        return false; // unchanged since last index
-    }
-
-    const rb::Json doc = rb::Json::parse(fileData);
-    rb::Vector<rb::Json> objects;
-    if (doc.isArray()) {
-        for (const auto& v : doc.items())
-            if (v.isObject()) objects.push_back(v);
-    } else if (doc.isObject()) {
-        objects.push_back(doc);
-    }
-
-    struct PendingChunk { rb::String embedText; rb::String content; };
-    rb::Vector<PendingChunk> pending;
-    for (const rb::Json& raw : objects) {
-        if (raw.boolValue("abstract", false)) continue;
-        const rb::Json resolved = CDDAResolver::resolve(raw, m_registry);
-        const Parser::Chunk chunk = m_parser->objectToChunk(resolved);
-        pending.push_back({ rb::from_std("search_document: ") + chunk.embedText, chunk.content });
-    }
-
+    // Phase 2 — single concurrent dispatch across all files.
     rb::Vector<rb::String> inputs;
-    inputs.reserve(pending.size());
-    for (const auto& pchunk : pending)
-        inputs.push_back(pchunk.embedText);
+    inputs.reserve(flat.size());
+    for (const auto& fc : flat) inputs.push_back(fc.embedText);
+
+    RAGBOT_LOG_INFO("Embedder::processJsonFiles(): dispatching {} chunks across {} files",
+                    static_cast<int>(flat.size()), static_cast<int>(fileSlots.size()));
 
     const rb::Vector<rb::Vector<float>> embeddings = m_generator->generateBatch(inputs);
-    if (embeddings.size() != pending.size()) {
-        RAGBOT_LOG_WARN("Embedder::fileEmbed(): batch embedding failed — aborting file");
-        m_db.rollbackFileTransaction();
-        return false;
+    if (static_cast<size_t>(embeddings.size()) != static_cast<size_t>(flat.size())) {
+        RAGBOT_LOG_WARN("Embedder::processJsonFiles(): batch embedding size mismatch ({} vs {})",
+                        static_cast<int>(embeddings.size()), static_cast<int>(flat.size()));
+        return { 0, static_cast<int>(fileSlots.size()) };
     }
 
-    int added = 0;
-    const auto chunkCount = static_cast<int>(pending.size());
-    for (int idx = 0; idx < chunkCount; ++idx) {
-        if (embeddings[idx].empty()) {
-            RAGBOT_LOG_WARN("Embedder::fileEmbed(): empty embedding for chunk — aborting file");
-            m_db.rollbackFileTransaction();
-            return false;
+    // Phase 3 — per-file commit in original order.
+    int indexed = 0;
+    int skipped = 0;
+    for (FileSlot& slot : fileSlots) {
+        if (slot.skipped) { ++skipped; continue; }
+
+        if (!m_db.beginFileTransaction()) {
+            RAGBOT_LOG_WARN("Embedder::processJsonFiles(): failed to open savepoint for {}",
+                            rb::to_std(slot.path));
+            ++skipped;
+            continue;
         }
-        if (m_db.embeddingSave(sourceId, embeddings[idx], pending[idx].content)) ++added;
+
+        const int sourceId = m_db.newSourceFileId(slot.hexHash, slot.path);
+        if (sourceId < 0) {
+            m_db.rollbackFileTransaction();
+            ++skipped;
+            continue;
+        }
+
+        bool ok = true;
+        int added = 0;
+        for (const int flatIdx : slot.flatIndices) {
+            if (embeddings[flatIdx].empty()) {
+                RAGBOT_LOG_WARN("Embedder::processJsonFiles(): empty embedding for chunk in {}",
+                                rb::to_std(slot.path));
+                ok = false;
+                break;
+            }
+            if (m_db.embeddingSave(sourceId, embeddings[flatIdx], flat[flatIdx].content)) ++added;
+        }
+
+        if (!ok || !m_db.commitFileTransaction()) {
+            m_db.rollbackFileTransaction();
+            ++skipped;
+            continue;
+        }
+
+        RAGBOT_LOG_INFO("Embedder::processJsonFiles(): indexed {} chunks from {}",
+                        added, rb::to_std(rb::path_filename(slot.path)));
+        ++indexed;
     }
 
-    if (!m_db.commitFileTransaction()) {
-        RAGBOT_LOG_WARN("Embedder::fileEmbed(): commit failed — {}", rb::to_std(rb::path_filename(path)));
-        m_db.rollbackFileTransaction();
-        return false;
-    }
-
-    RAGBOT_LOG_INFO("Embedder::fileEmbed(): indexed {} chunks from {}",
-                    added, rb::to_std(rb::path_filename(path)));
-    return true;
+    return { indexed, skipped };
 }
 
 

@@ -139,12 +139,75 @@ auto HttpClient::postStreaming(const String& url,
 auto HttpClient::postMany(const String& url,
                            const HeaderList& headers,
                            const Vector<Bytes>& bodies,
-                           int /*timeoutMs*/) -> Vector<Response>
+                           int timeoutMs) -> Vector<Response>
 {
-    Vector<Response> results;
-    results.reserve(static_cast<int>(bodies.size()));
-    for (const auto& body : bodies)
-        results.push_back(post(url, headers, body));
+    const size_t n = static_cast<size_t>(bodies.size());
+    Vector<Response> results(static_cast<int>(n));
+    if (n == 0) return results;
+
+    CURLM* multi = curl_multi_init();
+    if (!multi) {
+        for (auto& r : results) r.error = "curl_multi_init failed";
+        return results;
+    }
+
+    Vector<CURL*> easies(static_cast<int>(n), nullptr);
+    Vector<curl_slist*> headerLists(static_cast<int>(n), nullptr);
+
+    for (size_t i = 0; i < n; ++i) {
+        CURL* curl = curl_easy_init();
+        if (!curl) {
+            results[static_cast<int>(i)].error = "curl_easy_init failed";
+            continue;
+        }
+        easies[static_cast<int>(i)] = curl;
+        prepareHandle(curl, url, headers, bodies[static_cast<int>(i)],
+                      &headerLists[static_cast<int>(i)]);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeToBytes);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &results[static_cast<int>(i)].body);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(timeoutMs));
+        curl_easy_setopt(curl, CURLOPT_PRIVATE, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
+        curl_multi_add_handle(multi, curl);
+    }
+
+    int stillRunning = 0;
+    do {
+        const CURLMcode mc = curl_multi_perform(multi, &stillRunning);
+        if (mc != CURLM_OK) break;
+        if (stillRunning) {
+            const int pollMs = (timeoutMs > 0 && timeoutMs < 1000) ? timeoutMs : 1000;
+            curl_multi_poll(multi, nullptr, 0, pollMs, nullptr);
+        }
+    } while (stillRunning > 0);
+
+    CURLMsg* msg = nullptr;
+    int msgsLeft = 0;
+    while ((msg = curl_multi_info_read(multi, &msgsLeft)) != nullptr) {
+        if (msg->msg != CURLMSG_DONE) continue;
+        CURL* easy = msg->easy_handle;
+        char* priv = nullptr;
+        curl_easy_getinfo(easy, CURLINFO_PRIVATE, &priv);
+        const auto idx = static_cast<int>(reinterpret_cast<intptr_t>(priv));
+        Response& r = results[idx];
+        if (msg->data.result == CURLE_OK) {
+            long code = 0;
+            curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &code);
+            r.statusCode = static_cast<int>(code);
+        } else {
+            r.error = curl_easy_strerror(msg->data.result);
+        }
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+        if (easies[static_cast<int>(i)]) {
+            curl_multi_remove_handle(multi, easies[static_cast<int>(i)]);
+            curl_easy_cleanup(easies[static_cast<int>(i)]);
+        }
+        if (headerLists[static_cast<int>(i)])
+            curl_slist_free_all(headerLists[static_cast<int>(i)]);
+    }
+    curl_multi_cleanup(multi);
+
     return results;
 }
 

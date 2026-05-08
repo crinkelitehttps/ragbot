@@ -45,7 +45,7 @@ public:
 
     // Fire multiple POSTs to the same URL concurrently, return responses in input order.
     // Qt build: uses QNetworkAccessManager's native async dispatch (single thread).
-    // Curl build: falls back to sequential.
+    // Curl build: uses libcurl's multi-handle interface (single thread, concurrent transfers).
     auto postMany(const String& url, const HeaderList& headers,
                   const Vector<Bytes>& bodies, int timeoutMs = 240000) -> Vector<Response>;
 

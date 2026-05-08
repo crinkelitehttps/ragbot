@@ -23,7 +23,7 @@ public:
 
 private:
     auto processAllFiles() -> void;
-    auto fileEmbed(const rb::String& path) -> bool;
+    auto processJsonFiles(const rb::Vector<rb::String>& paths) -> std::pair<int, int>;
     auto fileEmbedManPage(const rb::String& path) -> bool;
 
     EmbeddingDatabase                   m_db;

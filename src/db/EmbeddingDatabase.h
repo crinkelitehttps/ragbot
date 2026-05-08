@@ -25,6 +25,9 @@ public:
     // Returns a new source_file_id or -1 if checksum already indexed.
     auto newSourceFileId(const rb::String& contentChecksum, const rb::String& file) -> int;
 
+    // Read-only check: true if a source row with this checksum already exists.
+    [[nodiscard]] auto sourceFileExists(const rb::String& contentChecksum) -> bool;
+
     auto embeddingSave(
         int sourceId,
         const rb::Vector<float>& chunkVector,
