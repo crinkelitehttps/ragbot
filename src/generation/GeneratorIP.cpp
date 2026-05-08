@@ -103,13 +103,38 @@ auto GeneratorIP::parseEmbeddingResponse(const rb::Bytes& data) -> rb::Vector<fl
 }
 
 
+// llama-server fails an entire request if any single input exceeds --ubatch-size
+// tokens, taking the rest of the sub-batch down with it. Cap each input below
+// the deploy script's UBATCH=2048: structured CDDA content tokenises at ~2
+// chars/token in the worst case, so 3500 chars targets ~1750 tokens with margin.
+static constexpr size_t MaxInputChars { 3500 };
+
+static auto truncateForEmbedding(const rb::String& input) -> rb::String
+{
+    if (input.size() <= MaxInputChars) return input;
+    rb::String truncated = input.substr(0, MaxInputChars);
+    // If the cut fell inside a multi-byte UTF-8 sequence, strip the partial
+    // bytes — nlohmann/json rejects incomplete sequences on encode.
+    if ((static_cast<unsigned char>(input[MaxInputChars]) & 0xC0) == 0x80) {
+        while (!truncated.empty() &&
+               (static_cast<unsigned char>(truncated.back()) & 0xC0) == 0x80)
+            truncated.pop_back();
+        if (!truncated.empty()) truncated.pop_back();  // drop leader byte
+    }
+    RAGBOT_LOG_WARN("GeneratorIP: truncating input from {} to {} chars",
+                    static_cast<int>(input.size()), static_cast<int>(truncated.size()));
+    return truncated;
+}
+
+
 static auto buildBatchBody(const rb::Vector<rb::String>& inputs,
                            size_t start, size_t end,
                            const rb::String& modelName) -> rb::Bytes
 {
     rb::Json inputArr = rb::Json::array();
     for (size_t idx = start; idx < end; ++idx)
-        inputArr.append(rb::Json::fromString(inputs[static_cast<int>(idx)]));
+        inputArr.append(rb::Json::fromString(
+            truncateForEmbedding(inputs[static_cast<int>(idx)])));
 
     rb::Json body = rb::Json::object();
     body.set("input", inputArr);
@@ -163,7 +188,7 @@ auto GeneratorIP::generate(const rb::String& data) -> rb::Vector<float>
     if (!m_isValid) return {};
 
     rb::Json body = rb::Json::object();
-    body.setString("input", data);
+    body.setString("input", truncateForEmbedding(data));
     body.setString("model", m_modelName);
 
     const rb::HttpClient::HeaderList headers {
