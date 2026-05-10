@@ -24,6 +24,11 @@ embeddings.db
 
 # vast.ai deploy state (regenerated per instance)
 .vast-instance-id
+.vast-network-file
+.vast-text-instance-id
+.vast-text-network-file
+.vast-combo-instance-id
+.vast-combo-network-file
 config-vast.json
 
 # Claude Code per-directory state

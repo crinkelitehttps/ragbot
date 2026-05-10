@@ -1,31 +1,48 @@
 #!/usr/bin/env bash
-# Rent a vast.ai GPU instance, run ragbot-embedserver, and write config-vast.json.
-# Usage: ./deploy-embed-server.sh [--api-key KEY] [--max-price 0.30] [--gpu-ram 8]
+# Rent a vast.ai GPU instance running both the embedding and text generation servers,
+# then write config-vast.json with all components configured.
+# Usage: ./deploy-combo-server.sh [--api-key KEY] [--max-price 0.50] [--gpu-ram 8]
+#                                  [--embed-model-url URL]
+#                                  [--text-model-url URL] [--text-model-name NAME]
+#                                  [--yes]
 set -euo pipefail
 
 VAST="python3 /home/joe/source/vast-cli/vast.py"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATE_FILE="$SCRIPT_DIR/.vast-instance-id"
+STATE_FILE="$SCRIPT_DIR/.vast-combo-instance-id"
+NETWORK_FILE_TRACKER="$SCRIPT_DIR/.vast-combo-network-file"
 CONFIG_OUT="$SCRIPT_DIR/config-vast.json"
-IMAGE="crinkelite/ragbot-embedserver:latest"
-MODEL_URL="https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q8_0.gguf"
-CONTAINER_PORT=8080
+IMAGE="crinkelite/ragbot-comboserver:latest"
+EMBED_MODEL_URL_DEFAULT="https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q8_0.gguf"
+TEXT_MODEL_URL_DEFAULT="https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q8_0.gguf"
+TEXT_MODEL_NAME_DEFAULT="Llama-3.2-3B-Instruct"
+EMBED_CONTAINER_PORT=8080
+TEXT_CONTAINER_PORT=8081
 POLL_INTERVAL=15
 POLL_TIMEOUT=300
 
 API_KEY="${VASTAI_API_KEY:-}"
-MAX_PRICE="0.30"
+MAX_PRICE="0.50"
 MIN_GPU_RAM="8"
 SSH_KEY_FILE="${HOME}/.ssh/id_ed25519.pub"
+EMBED_MODEL_URL="$EMBED_MODEL_URL_DEFAULT"
+TEXT_MODEL_URL="$TEXT_MODEL_URL_DEFAULT"
+TEXT_MODEL_NAME="$TEXT_MODEL_NAME_DEFAULT"
 YES=0
 
 usage() {
-    echo "Usage: $0 [--api-key KEY] [--max-price DOLLARS_PER_HR] [--gpu-ram GB] [--ssh-key PATH] [--yes]"
-    echo "  --api-key     vast.ai API key (default: \$VASTAI_API_KEY)"
-    echo "  --max-price   maximum price in \$/hr (default: $MAX_PRICE)"
-    echo "  --gpu-ram     minimum GPU VRAM in GB (default: $MIN_GPU_RAM)"
-    echo "  --ssh-key     path to SSH public key to attach (default: $SSH_KEY_FILE)"
-    echo "  --yes         skip confirmation prompt"
+    echo "Usage: $0 [--api-key KEY] [--max-price DOLLARS_PER_HR] [--gpu-ram GB]"
+    echo "          [--embed-model-url URL]"
+    echo "          [--text-model-url URL] [--text-model-name NAME]"
+    echo "          [--ssh-key PATH] [--yes]"
+    echo "  --api-key          vast.ai API key (default: \$VASTAI_API_KEY)"
+    echo "  --max-price        maximum price in \$/hr (default: $MAX_PRICE)"
+    echo "  --gpu-ram          minimum GPU VRAM in GB (default: $MIN_GPU_RAM)"
+    echo "  --embed-model-url  HuggingFace URL for embedding GGUF (default: nomic-embed Q8)"
+    echo "  --text-model-url   HuggingFace URL for text GGUF (default: Llama-3.2-3B Q8)"
+    echo "  --text-model-name  model name written to config-vast.json (default: $TEXT_MODEL_NAME_DEFAULT)"
+    echo "  --ssh-key          path to SSH public key (default: $SSH_KEY_FILE)"
+    echo "  --yes              skip confirmation prompt"
     exit 1
 }
 
@@ -34,6 +51,9 @@ while [[ $# -gt 0 ]]; do
         --api-key) API_KEY="$2"; shift 2 ;;
         --max-price) MAX_PRICE="$2"; shift 2 ;;
         --gpu-ram) MIN_GPU_RAM="$2"; shift 2 ;;
+        --embed-model-url) EMBED_MODEL_URL="$2"; shift 2 ;;
+        --text-model-url) TEXT_MODEL_URL="$2"; shift 2 ;;
+        --text-model-name) TEXT_MODEL_NAME="$2"; shift 2 ;;
         --ssh-key) SSH_KEY_FILE="$2"; shift 2 ;;
         --yes|-y) YES=1; shift ;;
         -h|--help) usage ;;
@@ -97,8 +117,8 @@ echo ""
 echo "Creating instance..."
 CREATE_OUT=$(vast_raw create instance "$OFFER_ID" \
     --image "$IMAGE" \
-    --env "-e MODEL_URL=$MODEL_URL -p ${CONTAINER_PORT}:${CONTAINER_PORT} -p 22:22" \
-    --disk 10 \
+    --env "-e EMBED_MODEL_URL=$EMBED_MODEL_URL -e TEXT_MODEL_URL=$TEXT_MODEL_URL -p ${EMBED_CONTAINER_PORT}:${EMBED_CONTAINER_PORT} -p ${TEXT_CONTAINER_PORT}:${TEXT_CONTAINER_PORT} -p 22:22" \
+    --disk 20 \
     --args 2>&1)
 
 INSTANCE_ID=$(echo "$CREATE_OUT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['new_contract'])" 2>/dev/null || true)
@@ -145,20 +165,23 @@ vast attach ssh "$INSTANCE_ID" "$SSH_KEY_FILE" || {
     echo "  vast attach ssh $INSTANCE_ID $SSH_KEY_FILE"
 }
 
-# ── 5. Extract public address ─────────────────────────────────────────────────
+# ── 5. Extract public address and both mapped ports ───────────────────────────
 INST_JSON=$(vast_raw show instance "$INSTANCE_ID" 2>/dev/null)
 
 HOST=$(echo "$INST_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('public_ipaddr') or d.get('ssh_host',''))")
-MAPPED_PORT=$(echo "$INST_JSON" | python3 -c "
+EMBED_MAPPED_PORT=$(echo "$INST_JSON" | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 ports = d.get('ports') or {}
-key = '${CONTAINER_PORT}/tcp'
-entries = ports.get(key, [])
-if entries:
-    print(entries[0]['HostPort'])
-else:
-    print('')
+entries = ports.get('${EMBED_CONTAINER_PORT}/tcp', [])
+print(entries[0]['HostPort'] if entries else '')
+" 2>/dev/null || true)
+TEXT_MAPPED_PORT=$(echo "$INST_JSON" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+ports = d.get('ports') or {}
+entries = ports.get('${TEXT_CONTAINER_PORT}/tcp', [])
+print(entries[0]['HostPort'] if entries else '')
 " 2>/dev/null || true)
 SSH_PORT=$(echo "$INST_JSON" | python3 -c "
 import json, sys
@@ -172,27 +195,32 @@ else:
 " 2>/dev/null || true)
 SSH_HOST_OUT=$(echo "$INST_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('public_ipaddr') or d.get('ssh_host',''))" 2>/dev/null || true)
 
-if [[ -z "$HOST" || -z "$MAPPED_PORT" ]]; then
+if [[ -z "$HOST" || -z "$EMBED_MAPPED_PORT" || -z "$TEXT_MAPPED_PORT" ]]; then
     echo "Instance is running but port mapping not yet available. Raw instance info:"
     echo "$INST_JSON" | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin), indent=2))" 2>/dev/null || echo "$INST_JSON"
     echo ""
-    echo "Check https://cloud.vast.ai/instances/ for the mapped port, then update config-vast.json manually."
+    echo "Check https://cloud.vast.ai/instances/ for the mapped ports, then update config-vast.json manually."
     exit 1
 fi
 
-BASE_PATH="http://${HOST}:${MAPPED_PORT}/"
-echo "Endpoint: $BASE_PATH"
+EMBED_BASE_PATH="http://${HOST}:${EMBED_MAPPED_PORT}/"
+TEXT_BASE_PATH="http://${HOST}:${TEXT_MAPPED_PORT}/"
+echo "Embed endpoint: $EMBED_BASE_PATH"
+echo "Text endpoint:  $TEXT_BASE_PATH"
 
-# ── 5b. Write ~/.vast network marker ─────────────────────────────────────────
+# ── 5b. Write ~/.vast network markers ────────────────────────────────────────
 NETWORK_DIR="$HOME/.vast"
 mkdir -p "$NETWORK_DIR"
-NETWORK_FILE="$NETWORK_DIR/ragbot-${HOST}:${MAPPED_PORT}.network"
-echo "$BASE_PATH" > "$NETWORK_FILE"
-echo "$NETWORK_FILE" > "$SCRIPT_DIR/.vast-network-file"
-echo "Network marker: $NETWORK_FILE"
+
+EMBED_NETWORK_FILE="$NETWORK_DIR/ragbot-${HOST}:${EMBED_MAPPED_PORT}.network"
+TEXT_NETWORK_FILE="$NETWORK_DIR/ragbot-text-${HOST}:${TEXT_MAPPED_PORT}.network"
+echo "$EMBED_BASE_PATH" > "$EMBED_NETWORK_FILE"
+echo "$TEXT_BASE_PATH" > "$TEXT_NETWORK_FILE"
+printf '%s\n%s\n' "$EMBED_NETWORK_FILE" "$TEXT_NETWORK_FILE" > "$NETWORK_FILE_TRACKER"
+echo "Network markers: $EMBED_NETWORK_FILE"
+echo "                 $TEXT_NETWORK_FILE"
 
 # ── 6. Write config-vast.json ─────────────────────────────────────────────────
-# Read embedder.files and embedder.name from main config.json as defaults
 FILES_PATH=$(python3 -c "import json; c=json.load(open('$SCRIPT_DIR/config.json')); print(c.get('embedder',{}).get('files',''))" 2>/dev/null || echo "")
 DB_NAME=$(python3 -c "import json; c=json.load(open('$SCRIPT_DIR/config.json')); print(c.get('embedder',{}).get('name','embeddings.db'))" 2>/dev/null || echo "embeddings.db")
 
@@ -207,6 +235,21 @@ config = {
         "generator": {
             "backend": "network",
             "platform": "vast.ai"
+        }
+    },
+    "researcher": {
+        "generator": {
+            "backend": "network",
+            "platform": "vast.ai-text",
+            "modelName": "$TEXT_MODEL_NAME"
+        }
+    },
+    "roleplayer": {
+        "enabled": False,
+        "generator": {
+            "backend": "network",
+            "platform": "vast.ai-text",
+            "modelName": "$TEXT_MODEL_NAME"
         }
     }
 }
@@ -228,4 +271,4 @@ if [[ -n "$SSH_HOST_OUT" && -n "$SSH_PORT" ]]; then
     echo ""
 fi
 echo "To tear down when finished:"
-echo "  ./teardown-embed-server.sh"
+echo "  ./teardown-combo-server.sh"

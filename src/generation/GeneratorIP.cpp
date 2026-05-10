@@ -10,34 +10,40 @@
 #include <string_view>
 
 
-static auto resolveVastNetworkEndpoint() -> rb::String
+static auto resolveVastFile(std::string_view filePrefix,
+                             std::string_view excludePrefix = {}) -> rb::String
 {
     const char* home = std::getenv("HOME");
     if (!home) {
-        RAGBOT_LOG_WARN("GeneratorIP: $HOME not set — cannot locate vast.ai .network file");
+        RAGBOT_LOG_WARN("GeneratorIP: $HOME not set — cannot locate .network file");
         return {};
     }
 
     const std::filesystem::path dir = std::filesystem::path(home) / ".vast";
     if (!std::filesystem::is_directory(dir)) {
-        RAGBOT_LOG_WARN("GeneratorIP: platform=vast.ai but ~/.vast/ not found");
+        RAGBOT_LOG_WARN("GeneratorIP: ~/.vast/ not found");
         return {};
     }
+
+    const std::string prefix(filePrefix);
+    const std::string exclude(excludePrefix);
 
     rb::Vector<rb::String> matches;
     for (const auto& entry : std::filesystem::directory_iterator(dir)) {
         const std::string name = entry.path().filename().string();
-        if (name.rfind("ragbot-", 0) == 0 && name.size() >= 16 &&
-            name.substr(name.size() - 8) == ".network")
-            matches.push_back(entry.path().string());
+        if (name.rfind(prefix, 0) != 0) continue;
+        if (name.size() < filePrefix.size() + 9) continue;
+        if (name.substr(name.size() - 8) != ".network") continue;
+        if (!exclude.empty() && name.rfind(exclude, 0) == 0) continue;
+        matches.push_back(entry.path().string());
     }
 
     if (matches.empty()) {
-        RAGBOT_LOG_WARN("GeneratorIP: platform=vast.ai but no ~/.vast/ragbot-*.network file found");
+        RAGBOT_LOG_WARN("GeneratorIP: no ~/.vast/{}*.network file found", prefix);
         return {};
     }
     if (matches.size() > 1) {
-        RAGBOT_LOG_WARN("GeneratorIP: multiple ~/.vast/ragbot-*.network files — using first alphabetically");
+        RAGBOT_LOG_WARN("GeneratorIP: multiple ~/.vast/{}*.network files — using first alphabetically", prefix);
         std::sort(matches.begin(), matches.end());
     }
 
@@ -50,8 +56,18 @@ static auto resolveVastNetworkEndpoint() -> rb::String
     while (!url.empty() && (url.back() == '\n' || url.back() == '\r' || url.back() == ' '))
         url.pop_back();
 
-    RAGBOT_LOG_INFO("GeneratorIP: resolved vast.ai endpoint {} from {}", url, matches[0]);
+    RAGBOT_LOG_INFO("GeneratorIP: resolved endpoint {} from {}", url, matches[0]);
     return url;
+}
+
+static auto resolveVastNetworkEndpoint() -> rb::String
+{
+    return resolveVastFile("ragbot-", "ragbot-text-");
+}
+
+static auto resolveVastTextEndpoint() -> rb::String
+{
+    return resolveVastFile("ragbot-text-");
 }
 
 
@@ -68,9 +84,13 @@ GeneratorIP::GeneratorIP(const rb::Json& config)
             m_basePath = legacy;
         }
     }
-    if (rb::str_empty(m_basePath) &&
-        config.stringValue(ConfigKeys::Platform) == ConfigKeys::PlatformVastAi)
-        m_basePath = resolveVastNetworkEndpoint();
+    if (rb::str_empty(m_basePath)) {
+        const rb::String platform = config.stringValue(ConfigKeys::Platform);
+        if (platform == ConfigKeys::PlatformVastAi)
+            m_basePath = resolveVastNetworkEndpoint();
+        else if (platform == ConfigKeys::PlatformVastAiText)
+            m_basePath = resolveVastTextEndpoint();
+    }
 
     m_isValid = !rb::str_empty(m_basePath);
     if (!m_isValid)

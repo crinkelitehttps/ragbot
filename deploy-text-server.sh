@@ -1,29 +1,36 @@
 #!/usr/bin/env bash
-# Rent a vast.ai GPU instance, run ragbot-embedserver, and write config-vast.json.
-# Usage: ./deploy-embed-server.sh [--api-key KEY] [--max-price 0.30] [--gpu-ram 8]
+# Rent a vast.ai GPU instance, run ragbot-textserver, and update config-vast.json.
+# Usage: ./deploy-text-server.sh [--api-key KEY] [--max-price 0.50] [--gpu-ram 16]
+#                                [--model-url URL] [--model-name NAME] [--yes]
 set -euo pipefail
 
 VAST="python3 /home/joe/source/vast-cli/vast.py"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATE_FILE="$SCRIPT_DIR/.vast-instance-id"
+STATE_FILE="$SCRIPT_DIR/.vast-text-instance-id"
 CONFIG_OUT="$SCRIPT_DIR/config-vast.json"
-IMAGE="crinkelite/ragbot-embedserver:latest"
-MODEL_URL="https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q8_0.gguf"
+IMAGE="crinkelite/ragbot-textserver:latest"
+MODEL_URL_DEFAULT="https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q8_0.gguf"
+MODEL_NAME_DEFAULT="Llama-3.2-3B-Instruct"
 CONTAINER_PORT=8080
 POLL_INTERVAL=15
 POLL_TIMEOUT=300
 
 API_KEY="${VASTAI_API_KEY:-}"
-MAX_PRICE="0.30"
-MIN_GPU_RAM="8"
+MAX_PRICE="0.50"
+MIN_GPU_RAM="16"
 SSH_KEY_FILE="${HOME}/.ssh/id_ed25519.pub"
+MODEL_URL="$MODEL_URL_DEFAULT"
+MODEL_NAME="$MODEL_NAME_DEFAULT"
 YES=0
 
 usage() {
-    echo "Usage: $0 [--api-key KEY] [--max-price DOLLARS_PER_HR] [--gpu-ram GB] [--ssh-key PATH] [--yes]"
+    echo "Usage: $0 [--api-key KEY] [--max-price DOLLARS_PER_HR] [--gpu-ram GB]"
+    echo "          [--model-url URL] [--model-name NAME] [--ssh-key PATH] [--yes]"
     echo "  --api-key     vast.ai API key (default: \$VASTAI_API_KEY)"
     echo "  --max-price   maximum price in \$/hr (default: $MAX_PRICE)"
     echo "  --gpu-ram     minimum GPU VRAM in GB (default: $MIN_GPU_RAM)"
+    echo "  --model-url   HuggingFace URL for the GGUF model (default: Llama-3.2-3B Q8)"
+    echo "  --model-name  model name written to config-vast.json (default: $MODEL_NAME_DEFAULT)"
     echo "  --ssh-key     path to SSH public key to attach (default: $SSH_KEY_FILE)"
     echo "  --yes         skip confirmation prompt"
     exit 1
@@ -34,6 +41,8 @@ while [[ $# -gt 0 ]]; do
         --api-key) API_KEY="$2"; shift 2 ;;
         --max-price) MAX_PRICE="$2"; shift 2 ;;
         --gpu-ram) MIN_GPU_RAM="$2"; shift 2 ;;
+        --model-url) MODEL_URL="$2"; shift 2 ;;
+        --model-name) MODEL_NAME="$2"; shift 2 ;;
         --ssh-key) SSH_KEY_FILE="$2"; shift 2 ;;
         --yes|-y) YES=1; shift ;;
         -h|--help) usage ;;
@@ -98,7 +107,7 @@ echo "Creating instance..."
 CREATE_OUT=$(vast_raw create instance "$OFFER_ID" \
     --image "$IMAGE" \
     --env "-e MODEL_URL=$MODEL_URL -p ${CONTAINER_PORT}:${CONTAINER_PORT} -p 22:22" \
-    --disk 10 \
+    --disk 20 \
     --args 2>&1)
 
 INSTANCE_ID=$(echo "$CREATE_OUT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['new_contract'])" 2>/dev/null || true)
@@ -186,41 +195,40 @@ echo "Endpoint: $BASE_PATH"
 # ── 5b. Write ~/.vast network marker ─────────────────────────────────────────
 NETWORK_DIR="$HOME/.vast"
 mkdir -p "$NETWORK_DIR"
-NETWORK_FILE="$NETWORK_DIR/ragbot-${HOST}:${MAPPED_PORT}.network"
+NETWORK_FILE="$NETWORK_DIR/ragbot-text-${HOST}:${MAPPED_PORT}.network"
 echo "$BASE_PATH" > "$NETWORK_FILE"
-echo "$NETWORK_FILE" > "$SCRIPT_DIR/.vast-network-file"
+echo "$NETWORK_FILE" > "$SCRIPT_DIR/.vast-text-network-file"
 echo "Network marker: $NETWORK_FILE"
 
-# ── 6. Write config-vast.json ─────────────────────────────────────────────────
-# Read embedder.files and embedder.name from main config.json as defaults
-FILES_PATH=$(python3 -c "import json; c=json.load(open('$SCRIPT_DIR/config.json')); print(c.get('embedder',{}).get('files',''))" 2>/dev/null || echo "")
-DB_NAME=$(python3 -c "import json; c=json.load(open('$SCRIPT_DIR/config.json')); print(c.get('embedder',{}).get('name','embeddings.db'))" 2>/dev/null || echo "embeddings.db")
-
+# ── 6. Merge researcher/roleplayer into config-vast.json ─────────────────────
 python3 - <<PYEOF
-import json
+import json, os
 
-config = {
-    "reranker": {"enabled": False},
-    "embedder": {
-        "name": "$DB_NAME",
-        "files": "$FILES_PATH",
-        "generator": {
-            "backend": "network",
-            "platform": "vast.ai"
-        }
-    }
+config_path = "$CONFIG_OUT"
+config = {}
+if os.path.exists(config_path):
+    with open(config_path) as f:
+        config = json.load(f)
+
+gen_block = {
+    "backend": "network",
+    "platform": "vast.ai-text",
+    "modelName": "$MODEL_NAME"
 }
 
-with open("$CONFIG_OUT", "w") as f:
+config.setdefault("researcher", {})["generator"] = gen_block
+config.setdefault("roleplayer", {})["generator"] = gen_block
+
+with open(config_path, "w") as f:
     json.dump(config, f, indent=2)
     f.write("\n")
 
-print(f"Wrote $CONFIG_OUT")
+print(f"Updated $CONFIG_OUT")
 PYEOF
 
 echo ""
-echo "Done. To index:"
-echo "  ../build-ragbot/ragbot --load --config $CONFIG_OUT"
+echo "Done. To run ragbot with the text server:"
+echo "  ../build-ragbot/ragbot --skip-index --config $CONFIG_OUT"
 echo ""
 if [[ -n "$SSH_HOST_OUT" && -n "$SSH_PORT" ]]; then
     echo "To SSH into the instance:"
@@ -228,4 +236,4 @@ if [[ -n "$SSH_HOST_OUT" && -n "$SSH_PORT" ]]; then
     echo ""
 fi
 echo "To tear down when finished:"
-echo "  ./teardown-embed-server.sh"
+echo "  ./teardown-text-server.sh"

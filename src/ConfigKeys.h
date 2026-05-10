@@ -50,7 +50,8 @@ namespace ConfigKeys {
     inline const rb::String BackendNetwork  { "network"  };
 
     // ── Platform values (optional; used with backend=network) ─────────────────
-    inline const rb::String Platform       { "platform" };
-    inline const rb::String PlatformVastAi { "vast.ai"  };
+    inline const rb::String Platform           { "platform"    };
+    inline const rb::String PlatformVastAi     { "vast.ai"     };
+    inline const rb::String PlatformVastAiText { "vast.ai-text" };
 
 } // namespace ConfigKeys

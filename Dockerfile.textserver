@@ -1,0 +1,67 @@
+# syntax=docker/dockerfile:1
+# Build args:
+#   CUDA=ON  (default) — links ggml-cuda, requires nvidia base images
+#   CUDA=OFF           — CPU-only, uses plain ubuntu base images (for local testing)
+
+ARG CUDA=ON
+
+# ---------------------------------------------------------------------------
+# Stage 1 — build llama-server
+# ---------------------------------------------------------------------------
+FROM nvidia/cuda:12.2.0-devel-ubuntu22.04 AS builder-cuda-ON
+FROM ubuntu:22.04 AS builder-cuda-OFF
+
+FROM builder-cuda-${CUDA} AS builder
+
+ARG CUDA
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        ninja-build \
+        git \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 https://github.com/ggerganov/llama.cpp /src/llama.cpp
+
+RUN cmake -B /build -S /src/llama.cpp \
+        -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DGGML_CUDA=${CUDA} \
+        -DLLAMA_BUILD_TESTS=OFF \
+        -DLLAMA_BUILD_EXAMPLES=OFF \
+        -DLLAMA_SERVER=ON \
+    && cmake --build /build --target llama-server -j$(nproc)
+
+# ---------------------------------------------------------------------------
+# Stage 2 — minimal runtime image
+# ---------------------------------------------------------------------------
+FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04 AS runtime-cuda-ON
+FROM ubuntu:22.04 AS runtime-cuda-OFF
+
+FROM runtime-cuda-${CUDA}
+
+ARG CUDA
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        wget \
+        ca-certificates \
+        libgomp1 \
+        openssh-server \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /var/run/sshd /root/.ssh \
+    && chmod 700 /root/.ssh \
+    && sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config \
+    && sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
+    && sed -i 's/^#\?PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+
+COPY --from=builder /build/bin/llama-server /usr/local/bin/llama-server
+
+COPY docker/entrypoint-text.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 22 8080
+
+ENTRYPOINT ["/entrypoint.sh"]
