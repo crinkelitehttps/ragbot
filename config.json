@@ -10,7 +10,7 @@
   "embedder": {
     "name": "embeddings.db",
     "files": "/home/joe/source/Cataclysm-DDA/data/json",
-    "topK": 10,
+    "topK": 3,
     "similarityThreshold": 0.0,
     "generator": {
       "backend": "network",

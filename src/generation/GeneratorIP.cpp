@@ -329,11 +329,16 @@ auto GeneratorIP::generateBatch(
 auto GeneratorIP::parseStaticResponse(const rb::Bytes& data) -> rb::String
 {
     const rb::Json doc = rb::Json::parse(data);
-    if (!doc.isValid()) return {};
+    if (!doc.isValid()) {
+        RAGBOT_LOG_WARN("GeneratorIP::parseStaticResponse(): invalid JSON: {}",
+                        bodySnippet(data));
+        return {};
+    }
 
     const rb::Json choices = doc.value("choices");
     if (!choices.isArray() || choices.size() == 0) {
-        RAGBOT_LOG_WARN("GeneratorIP::parseStaticResponse(): empty choices array");
+        RAGBOT_LOG_WARN("GeneratorIP::parseStaticResponse(): empty choices array: {}",
+                        bodySnippet(data));
         return {};
     }
     return choices.at(0).value("message").stringValue("content");
@@ -414,12 +419,15 @@ auto GeneratorIP::generateText(
 
     // Streaming path
     rb::String accumulated;
+    std::string rawReceived;  // captures non-SSE chunks (e.g., error JSON from server)
     const rb::HttpClient::Response resp = m_http.postStreaming(
         endpoint, headers, bodyBytes,
         [&](std::string_view chunk) {
             const rb::String parsed = parseStreamChunk(chunk);
             accumulated += parsed;
-            if (tokenSink)
+            if (parsed.empty())
+                rawReceived.append(chunk.data(), chunk.size());
+            else if (tokenSink)
                 tokenSink(rb::StringView(parsed));
             else {
                 std::fputs(rb::to_std(parsed).c_str(), stdout);
@@ -429,6 +437,13 @@ auto GeneratorIP::generateText(
 
     if (!rb::str_empty(resp.error))
         RAGBOT_LOG_WARN("GeneratorIP::generateText() stream error: {}", rb::to_std(resp.error));
+    else if (accumulated.empty()) {
+        const std::string detail = rawReceived.empty()
+            ? bodySnippet(resp.body)
+            : rawReceived.substr(0, 200);
+        RAGBOT_LOG_WARN("GeneratorIP::generateText() stream returned no tokens (HTTP {}): {}",
+                        resp.statusCode, detail);
+    }
 
     return accumulated;
 }
