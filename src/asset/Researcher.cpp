@@ -62,8 +62,14 @@ auto Researcher::research(
     prompt += rb::from_std("Context:\n") + context
             + rb::from_std("\nQuestion: ") + question;
 
+    bool instructionOk = false;
+    rb::String instruction = rb::read_file_text(
+        rb::from_std("inputs/researchPrompt.txt"), &instructionOk);
+    if (!instructionOk)
+        instruction = m_instruction;
+
     RAGBOT_LOG_INFO("Researcher::research(): system instruction:\n{}",
-                    rb::to_std(m_instruction));
+                    rb::to_std(instruction));
     RAGBOT_LOG_INFO("Researcher::research(): user prompt:\n{}",
                     rb::to_std(prompt));
 
@@ -71,7 +77,7 @@ auto Researcher::research(
         std::fputs("\nResearcher: ", stdout);
         std::fflush(stdout);
     }
-    const rb::String answer = m_generator->generateText(m_instruction, true, prompt, tokenSink);
+    const rb::String answer = m_generator->generateText(instruction, true, prompt, tokenSink);
     if (!tokenSink) {
         std::fputc('\n', stdout);
         std::fflush(stdout);

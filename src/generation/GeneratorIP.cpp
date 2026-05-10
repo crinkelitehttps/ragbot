@@ -104,11 +104,11 @@ auto GeneratorIP::parseEmbeddingResponse(const rb::Bytes& data) -> rb::Vector<fl
 
 
 // llama-server fails an entire request if any single input exceeds --ubatch-size
-// tokens, taking the rest of the sub-batch down with it. Cap each input below
-// the deploy script's UBATCH=2048: structured CDDA content has been observed at
-// 1.70 chars/token worst-case, so 2800 chars targets ~1647 tokens with margin
-// down to a 1.5 chars/token outlier.
-static constexpr size_t MaxInputChars { 2800 };
+// tokens. Dense CDDA JSON (short IDs, punctuation) has been observed at ~1.05
+// chars/token, so 2800 chars produced ~2660 tokens — well over UBATCH=2048.
+// 1700 chars yields ~1620 tokens at the observed ratio, comfortably under 2048
+// even if density reaches 1.0 chars/token (ASCII worst case).
+static constexpr size_t MaxInputChars { 1700 };
 
 static auto truncateForEmbedding(const rb::String& input) -> rb::String
 {
