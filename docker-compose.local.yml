@@ -1,0 +1,33 @@
+services:
+  comboserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.comboserver
+      args:
+        CUDA: "ON"
+    image: ragbot-comboserver-local
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      EMBED_MODEL_URL: "${EMBED_MODEL_URL:-https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q8_0.gguf}"
+      TEXT_MODEL_URL: "${TEXT_MODEL_URL:-https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q8_0.gguf}"
+      # Tuned for 8 GB VRAM (RTX 3050 / 3060 etc.)
+      # Embed model: short inputs only, 2048 ctx is sufficient
+      EMBED_CTX: "${EMBED_CTX:-2048}"
+      EMBED_PARALLEL: "${EMBED_PARALLEL:-4}"
+      EMBED_BATCH: "${EMBED_BATCH:-512}"
+      EMBED_UBATCH: "${EMBED_UBATCH:-512}"
+      # Text model: 4096 leaves headroom alongside the embed model
+      TEXT_CTX: "${TEXT_CTX:-4096}"
+      TEXT_PARALLEL: "${TEXT_PARALLEL:-1}"
+      TEXT_BATCH: "${TEXT_BATCH:-512}"
+      TEXT_UBATCH: "${TEXT_UBATCH:-512}"
+      N_GPU_LAYERS: "${N_GPU_LAYERS:-99}"
+    volumes:
+      # Models persist across container restarts — set RAGBOT_MODELS_DIR or
+      # place models in ./models relative to this file.
+      - "${RAGBOT_MODELS_DIR:-./models}:/models"
+    ports:
+      - "${EMBED_PORT:-8080}:8080"
+      - "${TEXT_PORT:-8081}:8081"
+    restart: unless-stopped

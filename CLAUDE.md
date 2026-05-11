@@ -35,6 +35,32 @@ Typical workflow:
 ./run.sh
 ```
 
+## Docker / Inference Servers
+
+The inference servers (embedding + text generation) run as Docker containers via `llama-server`.
+
+| File | What it does |
+|------|-------------|
+| `Dockerfile.comboserver` | Builds a single image running both embed (port 8080) and text (port 8081) servers |
+| `Dockerfile.embedserver` | Embed-only image |
+| `Dockerfile.textserver` | Text-only image |
+| `docker-compose.local.yml` | Local GPU deployment (NVIDIA, CUDA=ON); tuned for 8 GB VRAM |
+| `deploy-combo-server.sh` | Rent a vast.ai GPU instance and write `config-vast.json` |
+| `teardown-combo-server.sh` | Destroy the vast.ai instance |
+| `build-images.sh` | Build and push Docker images |
+
+**Local GPU (e.g. Windows 11 + RTX 3050 with Docker Desktop / WSL2):**
+```bash
+# First run downloads models; subsequent runs reuse the volume
+docker compose -f docker-compose.local.yml up
+
+# Override model URLs or point at a local models dir:
+RAGBOT_MODELS_DIR=/path/to/models TEXT_MODEL_URL="" EMBED_MODEL_URL="" \
+  docker compose -f docker-compose.local.yml up
+```
+
+Requires Docker Desktop with NVIDIA GPU support enabled (Settings → Resources → GPU).
+
 ## Build Modes
 
 The project uses CMake. `compile_commands.json` is generated automatically (`CMAKE_EXPORT_COMPILE_COMMANDS ON`).
